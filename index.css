@@ -1,0 +1,34 @@
+@media print {
+    @page {
+        size: A4 portrait;
+        margin: 0mm;
+    }
+
+    body {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        margin: 0;
+        padding: 0;
+        background: white;
+    }
+
+    /* Force portrait orientation and ensure container fits */
+    .print\:w-full {
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+
+    /* Hide potential unwanted elements if they don't have a print:hidden class */
+    /* Re-enforce print utilities */
+    .print\:shadow-none {
+        box-shadow: none !important;
+    }
+
+    .print\:p-0 {
+        padding: 0 !important;
+    }
+
+    .print\:m-0 {
+        margin: 0 !important;
+    }
+}
