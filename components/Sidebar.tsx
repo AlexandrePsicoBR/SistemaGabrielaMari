@@ -1,17 +1,25 @@
 import React from 'react';
-import { View } from '../types';
+import { View, AdminData } from '../types';
 
 interface SidebarProps {
   currentView: View;
   onChangeView: (view: View) => void;
   onLogout: () => void;
+  onClose?: () => void;
+  className?: string;
 }
 
 import { supabase } from '../lib/supabase';
 import { profileService } from '../lib/profile';
-import AdminProfileModal, { AdminData } from './AdminProfileModal';
+import AdminProfileModal from './AdminProfileModal';
 
-const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout }) => {
+const Sidebar: React.FC<SidebarProps> = ({
+  currentView,
+  onChangeView,
+  onLogout,
+  onClose,
+  className = ""
+}) => {
   const [showAdminModal, setShowAdminModal] = React.useState(false);
   const [userId, setUserId] = React.useState<string | null>(null);
   const [adminData, setAdminData] = React.useState<AdminData>({
@@ -56,6 +64,11 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout }
     { id: 'inventory', label: 'Estoque', icon: 'inventory_2' },
   ];
 
+  const handleItemClick = (viewId: View) => {
+    onChangeView(viewId);
+    if (onClose) onClose();
+  };
+
   const handleSaveAdmin = async (newData: AdminData) => {
     // Optimistic update
     setAdminData(newData);
@@ -64,7 +77,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout }
   };
 
   return (
-    <aside className="w-64 bg-white border-r border-[#f3f2f1] hidden md:flex flex-col h-full shrink-0">
+    <aside className={`w-64 bg-white border-r border-[#f3f2f1] flex flex-col h-full shrink-0 ${className}`}>
       {/* ... Header remains same ... */}
       <div className="p-8 pb-4 flex flex-col items-center border-b border-[#f3f2f1]">
         <div className="bg-primary/20 p-2 rounded-lg mb-3">
@@ -78,7 +91,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onChangeView, onLogout }
         {menuItems.map((item) => (
           <button
             key={item.id}
-            onClick={() => onChangeView(item.id)}
+            onClick={() => handleItemClick(item.id)}
             className={`flex items-center w-full gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${currentView === item.id
               ? 'bg-primary/10 text-primary font-medium shadow-sm'
               : 'text-text-muted hover:bg-background-light hover:text-text-main'
