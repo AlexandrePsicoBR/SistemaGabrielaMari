@@ -7,9 +7,17 @@ interface PatientSidebarProps {
     currentView: View;
     onChangeView: (view: View) => void;
     onLogout: () => void;
+    onClose?: () => void;
+    className?: string;
 }
 
-const PatientSidebar: React.FC<PatientSidebarProps> = ({ currentView, onChangeView, onLogout }) => {
+const PatientSidebar: React.FC<PatientSidebarProps> = ({
+    currentView,
+    onChangeView,
+    onLogout,
+    onClose,
+    className = ""
+}) => {
     const [name, setName] = useState('Paciente');
     const [avatar, setAvatar] = useState<string | null>(null);
 
@@ -35,8 +43,13 @@ const PatientSidebar: React.FC<PatientSidebarProps> = ({ currentView, onChangeVi
         { id: 'patient-profile', label: 'Meu Perfil', icon: 'person' },
     ];
 
+    const handleItemClick = (viewId: View) => {
+        onChangeView(viewId);
+        if (onClose) onClose();
+    };
+
     return (
-        <aside className="w-64 bg-white border-r border-[#f3f2f1] hidden md:flex flex-col h-full shrink-0 font-sans">
+        <aside className={`w-64 bg-white border-r border-[#f3f2f1] flex flex-col h-full shrink-0 font-sans ${className}`}>
             <div className="p-8 pb-4 flex flex-col items-center border-b border-[#f3f2f1]">
                 <div className="bg-primary/20 p-2 rounded-lg mb-3">
                     <span className="material-symbols-outlined text-primary text-3xl">spa</span>
@@ -49,7 +62,7 @@ const PatientSidebar: React.FC<PatientSidebarProps> = ({ currentView, onChangeVi
                 {menuItems.map((item) => (
                     <button
                         key={item.id}
-                        onClick={() => onChangeView(item.id)}
+                        onClick={() => handleItemClick(item.id)}
                         className={`flex items-center w-full gap-3 px-4 py-3 rounded-xl transition-all duration-200 group ${currentView === item.id
                             ? 'bg-primary/10 text-primary font-medium shadow-sm'
                             : 'text-text-muted hover:bg-gray-50 hover:text-text-main'
