@@ -10,7 +10,7 @@ export interface Transaction {
   type: 'income' | 'expense';
   category: string;
   paymentMethod: string;
-  status: 'Pago' | 'Pendente';
+  status: 'Pago' | 'Pendente' | 'Recebido' | 'Em aberto' | 'Não pago';
 }
 
 interface ModalProps {
@@ -67,7 +67,7 @@ const NewTransactionModal: React.FC<ModalProps> = ({ onClose, onSave, initialDat
         date: initialData.date,
         category: initialData.category,
         paymentMethod: initialData.paymentMethod || '',
-        isPaid: initialData.status === 'Pago'
+        isPaid: initialData.status === 'Pago' || initialData.status === 'Recebido'
       });
     } else if (initialPatientName) {
       // Se não for edição, mas tiver nome inicial (contexto do paciente), preenche
@@ -144,7 +144,9 @@ const NewTransactionModal: React.FC<ModalProps> = ({ onClose, onSave, initialDat
           type: type,
           category: formData.category || 'Outros',
           payment_method: formData.paymentMethod || 'Dinheiro',
-          status: formData.isPaid ? 'Pago' : 'Pendente'
+          status: type === 'income'
+            ? (formData.isPaid ? 'Recebido' : 'Em aberto')
+            : (isRecurring && !isEditing ? 'Não pago' : (formData.isPaid ? 'Pago' : 'Não pago'))
         };
         payloads.push(payload);
       }

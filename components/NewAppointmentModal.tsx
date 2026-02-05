@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { scheduleService } from '../lib/schedule';
 import { supabase } from '../lib/supabase';
 import { Service } from '../types';
@@ -8,25 +8,65 @@ interface ModalProps {
   onClose: () => void;
 }
 
+interface PatientOption {
+  id: string;
+  name: string;
+  phone: string;
+}
+
 const NewAppointmentModal: React.FC<ModalProps> = ({ onClose }) => {
   const [loading, setLoading] = useState(false);
   const [services, setServices] = useState<Service[]>([]);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
 
+  // Patient Search State
+  const [patients, setPatients] = useState<PatientOption[]>([]);
+  const [patientSearch, setPatientSearch] = useState('');
+  const [showPatientDropdown, setShowPatientDropdown] = useState(false);
+  const [selectedPatientId, setSelectedPatientId] = useState<string | undefined>(undefined);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
   const [formData, setFormData] = useState({
-    patientName: '',
     date: '',
     time: '',
     notes: ''
   });
 
   useEffect(() => {
-    async function fetchServices() {
-      const { data } = await supabase.from('services').select('*').eq('active', true);
-      if (data) setServices(data);
+    async function fetchData() {
+      // Fetch Services
+      const { data: servicesData } = await supabase.from('services').select('*').eq('active', true);
+      if (servicesData) setServices(servicesData);
+
+      // Fetch Patients (for search)
+      const { data: patientsData } = await supabase.from('patients').select('id, name, phone').order('name');
+      if (patientsData) setPatients(patientsData);
     }
-    fetchServices();
+    fetchData();
   }, []);
+
+  // Click outside to close dropdown
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setShowPatientDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handlePatientSelect = (patient: PatientOption) => {
+    setPatientSearch(patient.name);
+    setSelectedPatientId(patient.id);
+    setShowPatientDropdown(false);
+  };
+
+  const handlePatientSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPatientSearch(e.target.value);
+    setSelectedPatientId(undefined); // Reset ID if typing manual name
+    setShowPatientDropdown(true);
+  };
 
   const handleServiceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const serviceId = e.target.value;
@@ -34,9 +74,14 @@ const NewAppointmentModal: React.FC<ModalProps> = ({ onClose }) => {
     setSelectedService(service);
   };
 
+  // Filter patients based on search
+  const filteredPatients = patients.filter(p =>
+    p.name.toLowerCase().includes(patientSearch.toLowerCase())
+  );
+
   const handleSubmit = async () => {
     try {
-      if (!formData.patientName || !formData.date || !formData.time || !selectedService) {
+      if (!patientSearch || !formData.date || !formData.time || !selectedService) {
         alert('Preencha os campos obrigatórios (Paciente, Procedimento, Data e Hora)');
         return;
       }
@@ -48,8 +93,14 @@ const NewAppointmentModal: React.FC<ModalProps> = ({ onClose }) => {
       const duration = selectedService.duration || 60;
       const endsAt = new Date(startsAt.getTime() + duration * 60 * 1000);
 
+      const patientPhone = selectedPatientId
+        ? patients.find(p => p.id === selectedPatientId)?.phone
+        : undefined;
+
       await scheduleService.createAppointment({
-        patientName: formData.patientName,
+        patientName: patientSearch, // Use the searched text as name
+        patientId: selectedPatientId,
+        patientPhone,
         procedure: selectedService.name,
         startsAt,
         endsAt,
@@ -79,15 +130,43 @@ const NewAppointmentModal: React.FC<ModalProps> = ({ onClose }) => {
         </div>
 
         <div className="p-6 space-y-4 bg-[#FDFBF9]">
-          <div className="space-y-1.5">
+
+          {/* Patient Autocomplete */}
+          <div className="space-y-1.5 relative" ref={dropdownRef}>
             <label className="text-xs font-bold uppercase tracking-wide text-text-muted">Paciente</label>
-            <input
-              type="text"
-              placeholder="Nome do paciente"
-              value={formData.patientName}
-              onChange={(e) => setFormData({ ...formData, patientName: e.target.value })}
-              className="w-full h-10 px-3 rounded-lg bg-white border border-[#e3e0de] focus:ring-1 focus:ring-primary focus:border-primary outline-none text-sm text-gray-900 placeholder:text-gray-400"
-            />
+            <div className="relative">
+              <input
+                type="text"
+                placeholder="Nome do paciente (busque ou digite novo)"
+                value={patientSearch}
+                onChange={handlePatientSearchChange}
+                onFocus={() => setShowPatientDropdown(true)}
+                className={`w-full h-10 px-3 pl-10 rounded-lg bg-white border ${showPatientDropdown ? 'border-primary ring-1 ring-primary' : 'border-[#e3e0de]'} focus:outline-none text-sm text-gray-900 placeholder:text-gray-400`}
+              />
+              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[18px]">search</span>
+
+              {/* Dropdown */}
+              {showPatientDropdown && patientSearch && filteredPatients.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-[#e3e0de] rounded-lg shadow-lg z-20 max-h-48 overflow-y-auto">
+                  {filteredPatients.map(patient => (
+                    <button
+                      key={patient.id}
+                      onClick={() => handlePatientSelect(patient)}
+                      className="w-full text-left px-4 py-2 hover:bg-gray-50 flex flex-col border-b border-gray-50 last:border-none"
+                    >
+                      <span className="text-sm font-medium text-text-main">{patient.name}</span>
+                      {patient.phone && <span className="text-xs text-text-muted">{patient.phone}</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {selectedPatientId && (
+              <p className="text-xs text-green-600 font-medium flex items-center gap-1">
+                <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                Paciente vinculado
+              </p>
+            )}
           </div>
 
           <div className="space-y-1.5">

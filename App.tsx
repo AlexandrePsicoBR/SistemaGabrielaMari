@@ -59,17 +59,38 @@ const App: React.FC = () => {
     // 1. Force Logout on Startup (Fix for "Always Login" requirement)
     const initSession = async () => {
       // Check for recovery flow in URL
-      const isRecovery = window.location.hash && window.location.hash.includes('type=recovery');
+      // const isRecovery = window.location.hash && window.location.hash.includes('type=recovery');
 
-      if (!isRecovery) {
-        // Only force logout if NOT in recovery mode
-        await supabase.auth.signOut();
-        setIsAuthenticated(false);
-        isAuthRef.current = false;
-        setUserRole(null);
+      // 4-Day Session Persistence Logic
+      // We store a timestamp on first login and check it here.
+      const EXPIRY_MS = 4 * 24 * 60 * 60 * 1000;
+      const storedTimestamp = localStorage.getItem('session_start_timestamp');
+      const now = new Date().getTime();
+
+      if (storedTimestamp) {
+        if (now - parseInt(storedTimestamp) > EXPIRY_MS) {
+          console.log('Session expired (4 days confirmed). Logging out.');
+          await supabase.auth.signOut();
+          localStorage.removeItem('session_start_timestamp');
+          setIsAuthenticated(false);
+          setLoading(false);
+          return;
+        }
+      } else {
+        // First login or legacy session -> Set timestamp now
+        localStorage.setItem('session_start_timestamp', now.toString());
       }
 
-      setLoading(false); // Stop loading immediately
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setIsAuthenticated(true);
+        isAuthRef.current = true;
+        // Optionally fetch role here if needed, but onAuthStateChange usually handles it
+        // triggering role fetch here just in case:
+        fetchUserRole(session.user.id);
+      }
+
+      setLoading(false);
     };
 
 
@@ -145,7 +166,7 @@ const App: React.FC = () => {
       case 'patients':
         return <Patients onPatientClick={handlePatientSelect} />;
       case 'patient-detail':
-        return <PatientDetail patientId={selectedPatientId} onBack={() => setCurrentView('patients')} />;
+        return <PatientDetail patientId={selectedPatientId} userRole={userRole} onBack={() => setCurrentView('patients')} />;
       case 'services':
         return <Services />;
       case 'inventory':

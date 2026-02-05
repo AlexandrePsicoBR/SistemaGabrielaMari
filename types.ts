@@ -55,6 +55,7 @@ export interface Service {
   duration: number;
   description: string;
   active: boolean;
+  expiration_months?: number; // Added for Procedure Expiration
 }
 
 export interface BlogPost {

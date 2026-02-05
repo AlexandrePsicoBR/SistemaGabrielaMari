@@ -23,6 +23,7 @@ import TermoPreenchimento from '../components/TermoPreenchimento';
 interface PatientDetailProps {
   onBack: () => void;
   patientId: string | null;
+  userRole?: 'admin' | 'patient' | null;
 }
 
 interface HistoryEvent {
@@ -40,14 +41,17 @@ interface HistoryEvent {
   clinicalNotes?: string;
   tags?: string[];
   timelineColor?: string;
+  isoDate?: string;
+  expirationDate?: string;
 }
 
 
 
-const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId }) => {
+const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRole }) => {
   const [currentPatient, setCurrentPatient] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [historyData, setHistoryData] = useState<HistoryEvent[]>([]);
+  const [selectedEvolution, setSelectedEvolution] = useState<any>(null); // For editing
 
   // Update state when patientId changes
   useEffect(() => {
@@ -99,6 +103,20 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId }) => {
         };
         setCurrentPatient(mappedPatient);
 
+        // 1.5 Fetch Services Metadata for dynamic calculation
+        const { data: servicesData } = await supabase
+          .from('services')
+          .select('name, expiration_months')
+          .gt('expiration_months', 0);
+
+        const serviceMap = new Map();
+        if (servicesData) {
+          servicesData.forEach((s: any) => {
+            // Store lower case name for matching
+            serviceMap.set(s.name.trim().toLowerCase(), s.expiration_months);
+          });
+        }
+
         // 2. Fetch History
         const { data: history, error: historyError } = await supabase
           .from('clinical_history')
@@ -108,22 +126,39 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId }) => {
 
         if (historyError) throw historyError;
 
-        const mappedHistory = (history || []).map((h: any) => ({
-          id: h.id,
-          title: h.title,
-          date: formatDate(new Date(h.date), { day: '2-digit', month: 'short', year: 'numeric' }), // Formatting needs to match UI expectation or keep as ISO
-          doctor: h.doctor || 'Dra. Gabriela Mari',
-          icon: h.type === 'procedure' ? 'face' : 'medical_services',
-          iconColor: 'text-primary', // Default styling for now
-          iconBg: 'bg-primary/10',
-          status: h.status || 'Concluído',
-          statusColor: 'bg-green-100 text-green-700 border-green-200',
-          description: h.description,
-          patientSummary: h.patient_summary,
-          clinicalNotes: h.clinical_notes,
-          tags: h.tags || [],
-          timelineColor: 'bg-primary'
-        }));
+        const mappedHistory = (history || []).map((h: any) => {
+          let expirationDate = h.expiration_date;
+
+          // Dynamic calculation if missing
+          if (!expirationDate && h.title) {
+            const normalizedTitle = h.title.trim().toLowerCase();
+            if (serviceMap.has(normalizedTitle)) {
+              const months = serviceMap.get(normalizedTitle);
+              const d = new Date(h.date);
+              d.setMonth(d.getMonth() + months);
+              expirationDate = d.toISOString().split('T')[0];
+            }
+          }
+
+          return {
+            id: h.id,
+            title: h.title,
+            date: formatDate(new Date(h.date), { day: '2-digit', month: 'short', year: 'numeric' }), // Formatting needs to match UI expectation or keep as ISO
+            isoDate: h.date, // Keep original ISO date for editing
+            doctor: h.doctor || 'Dra. Gabriela Mari',
+            icon: h.type === 'procedure' ? 'face' : 'medical_services',
+            iconColor: 'text-primary', // Default styling for now
+            iconBg: 'bg-primary/10',
+            status: h.status || 'Concluído',
+            statusColor: 'bg-green-100 text-green-700 border-green-200',
+            description: h.description,
+            patientSummary: h.patient_summary,
+            clinicalNotes: h.clinical_notes,
+            tags: h.tags || [],
+            timelineColor: 'bg-primary',
+            expirationDate: expirationDate
+          };
+        });
         setHistoryData(mappedHistory);
 
         // 3. Fetch Photos
@@ -842,6 +877,102 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId }) => {
     }
   };
 
+  const handleSaveEvolution = async (data: any) => {
+    try {
+      if (!currentPatient?.id) return;
+
+      if (selectedEvolution) {
+        // Update existing
+        const { error } = await supabase
+          .from('clinical_history')
+          .update({
+            date: data.date,
+            title: data.title,
+            description: data.title,
+            patient_summary: data.patientSummary,
+            clinical_notes: data.clinicalNotes,
+          })
+          .eq('id', selectedEvolution.id);
+
+        if (error) throw error;
+
+        // Update local state
+        setHistoryData(historyData.map(h => h.id === selectedEvolution.id ? {
+          ...h,
+          date: formatDate(new Date(data.date), { day: '2-digit', month: 'short', year: 'numeric' }),
+          isoDate: data.date,
+          title: data.title,
+          patientSummary: data.patientSummary,
+          clinicalNotes: data.clinicalNotes,
+          description: data.patientSummary || data.title
+        } : h));
+
+        setSelectedEvolution(null);
+
+      } else {
+        // Insert new
+        const { data: inserted, error } = await supabase
+          .from('clinical_history')
+          .insert({
+            patient_id: currentPatient.id,
+            date: data.date,
+            title: data.title,
+            doctor: data.doctor,
+            description: data.title, // or description
+            patient_summary: data.patientSummary,
+            clinical_notes: data.clinicalNotes,
+            type: 'procedure', // default
+            status: data.status,
+            tags: [] // if any
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        const newEvent: HistoryEvent = {
+          id: inserted.id,
+          title: inserted.title,
+          date: formatDate(new Date(inserted.date), { day: '2-digit', month: 'short', year: 'numeric' }),
+          isoDate: inserted.date,
+          doctor: inserted.doctor,
+          patientSummary: inserted.patient_summary,
+          clinicalNotes: inserted.clinical_notes,
+          icon: 'healing',
+          iconColor: 'text-primary',
+          iconBg: 'bg-primary/10',
+          status: inserted.status,
+          statusColor: 'bg-green-100 text-green-700 border-green-200',
+          description: inserted.patient_summary || inserted.description
+        };
+
+        // Update local state and history data
+        setHistoryData([newEvent, ...historyData]);
+      }
+    } catch (error) {
+      console.error('Error saving evolution:', error);
+      alert('Erro ao salvar evolução.');
+    }
+  };
+
+  const handleDeleteHistory = async (id: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir esta evolução?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('clinical_history')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setHistoryData(historyData.filter(h => h.id !== id));
+    } catch (error) {
+      console.error('Error deleting evolution:', error);
+      alert('Erro ao excluir evolução.');
+    }
+  };
+
   const renderOverview = () => (
     <>
 
@@ -978,8 +1109,71 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId }) => {
               )}
             </div>
           </div>
+
+
+          {/* Expiration Block */}
+          <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-[#f3f2f1] overflow-hidden mt-4">
+            <div className="p-6 border-b border-[#f3f2f1] flex justify-between items-center bg-orange-50">
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-orange-600">alarm_on</span>
+                <h3 className="font-bold text-gray-900 text-lg">Vencimento de Procedimentos</h3>
+              </div>
+              <span className="px-2 py-1 bg-white rounded text-xs font-bold text-orange-600 border border-orange-200">Próximos 30 dias</span>
+            </div>
+
+            <div className="divide-y divide-[#f3f2f1]">
+              {historyData.filter(h => {
+                if (!h.expirationDate) return false;
+                const expDate = new Date(h.expirationDate);
+                const today = new Date();
+                const thirtyDays = new Date();
+                thirtyDays.setDate(today.getDate() + 30);
+
+                // Fix timezone issue for comparison (simple approach)
+                const expStr = h.expirationDate;
+                const thirtyDaysStr = thirtyDays.toISOString().split('T')[0];
+
+                return expStr <= thirtyDaysStr;
+              }).sort((a, b) => new Date(a.expirationDate!).getTime() - new Date(b.expirationDate!).getTime())
+                .map((proc, idx) => {
+                  const expDate = new Date(proc.expirationDate!);
+                  const today = new Date();
+                  const isExpired = expDate < today;
+
+                  return (
+                    <div key={idx} className="p-5 flex items-center justify-between hover:bg-background-light transition-colors">
+                      <div className="flex items-center gap-4">
+                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white ${isExpired ? 'bg-red-500' : 'bg-orange-500'}`}>
+                          <span className="material-symbols-outlined">history_toggle_off</span>
+                        </div>
+                        <div>
+                          <p className="font-bold text-text-main">{proc.title}</p>
+                          <p className={`text-xs mt-0.5 font-bold ${isExpired ? 'text-red-600' : 'text-orange-600'}`}>
+                            {isExpired ? 'Vencido em: ' : 'Vence em: '} {formatDate(expDate)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <button
+                          onClick={() => {
+                            const message = `Olá, gostaria de agendar o retorno do procedimento ${proc.title} que ${isExpired ? 'venceu' : 'vence'} em ${formatDate(expDate)}.`;
+                            window.open(`https://wa.me/55${patientData.phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`, '_blank');
+                          }}
+                          className="text-primary text-sm font-bold border border-primary px-3 py-1.5 rounded-lg hover:bg-primary hover:text-white transition-colors flex items-center gap-1"
+                        >
+                          <span className="material-symbols-outlined text-sm">calendar_add_on</span> Reagendar
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              {historyData.filter(h => h.expirationDate).length === 0 && (
+                <div className="p-6 text-center text-text-muted text-sm">Não há procedimentos vencidos ou a vencer.</div>
+              )}
+            </div>
+          </div>
         </div>
-      </div >
+      </div>
     </>
   );
 
@@ -1041,6 +1235,39 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId }) => {
                 <span className="bg-gray-100 text-text-muted text-xs font-bold px-3 py-1 rounded-full">
                   {event.doctor}
                 </span>
+                {userRole === 'admin' && (
+                  <div className="flex gap-1 ml-4">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedEvolution({
+                          id: event.id,
+                          date: event.isoDate || new Date().toISOString().split('T')[0],
+                          title: event.title,
+                          patientSummary: event.patientSummary,
+                          clinicalNotes: event.clinicalNotes,
+                          doctor: event.doctor,
+                          status: event.status
+                        });
+                        setShowEvolutionModal(true);
+                      }}
+                      className="p-1 text-text-muted hover:text-primary hover:bg-gray-100 rounded-full transition-colors"
+                      title="Editar Evolução"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">edit</span>
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteHistory(event.id);
+                      }}
+                      className="p-1 text-text-muted hover:text-red-500 hover:bg-red-50 rounded-full transition-colors"
+                      title="Excluir Evolução"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">delete</span>
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Sections */}
@@ -1165,20 +1392,22 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId }) => {
           <div className="flex gap-2">
             <div className="px-4 py-2 bg-green-50 text-green-700 rounded-lg border border-green-100 text-sm font-bold">
               <span className="block text-[10px] uppercase text-green-600 font-normal">Total Pago</span>
-              R$ {financialRecords.filter(r => r.status === 'Pago').reduce((acc, curr) => acc + curr.value, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              R$ {financialRecords.filter(r => r.status === 'Pago' || r.status === 'Recebido').reduce((acc, curr) => acc + curr.value, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </div>
             <div className="px-4 py-2 bg-orange-50 text-orange-700 rounded-lg border border-orange-100 text-sm font-bold">
               <span className="block text-[10px] uppercase text-orange-600 font-normal">Em Aberto</span>
-              R$ {financialRecords.filter(r => r.status === 'Pendente').reduce((acc, curr) => acc + curr.value, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              R$ {financialRecords.filter(r => r.status === 'Pendente' || r.status === 'Em aberto').reduce((acc, curr) => acc + curr.value, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </div>
+            {userRole === 'admin' && (
+              <button
+                onClick={handleAddPayment}
+                className="bg-primary text-white text-sm font-bold px-4 py-2 rounded-lg hover:bg-primary-dark transition-colors flex items-center gap-2 shadow-sm"
+              >
+                <span className="material-symbols-outlined text-sm">add</span>
+                Add Pagamento
+              </button>
+            )}
           </div>
-          <button
-            onClick={handleAddPayment}
-            className="bg-primary text-white text-sm font-bold px-4 py-2 rounded-lg hover:bg-primary-dark transition-colors flex items-center gap-2 shadow-sm"
-          >
-            <span className="material-symbols-outlined text-sm">add</span>
-            Add Pagamento
-          </button>
         </div>
       </div>
 
@@ -1204,7 +1433,14 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId }) => {
                 </td>
                 <td className="py-4 px-6 text-sm text-text-muted">{record.paymentMethod || '-'}</td>
                 <td className="py-4 px-6">
-                  <span className={`px-2 py-1 rounded text-xs font-bold border ${record.status === 'Pago' ? 'bg-green-100 text-green-700 border-green-200' : 'bg-orange-100 text-orange-700 border-orange-200'}`}>
+                  <span className={`px-2 py-1 rounded text-xs font-bold border ${record.status === 'Pago' || record.status === 'Recebido'
+                    ? 'bg-green-100 text-green-700 border-green-200'
+                    : record.status === 'Em aberto' || record.status === 'Pendente'
+                      ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                      : record.status === 'Não pago'
+                        ? 'bg-gray-800 text-white border-gray-700'
+                        : 'bg-gray-100 text-gray-700'
+                    }`}>
                     {record.status}
                   </span>
                 </td>
@@ -1212,13 +1448,15 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId }) => {
                   {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(record.value)}
                 </td>
                 <td className="py-4 px-6 text-right">
-                  <button
-                    onClick={() => handleEditPayment(record)}
-                    className="text-text-muted hover:text-primary p-2 hover:bg-gray-100 rounded-full transition-colors"
-                    title="Editar Detalhes"
-                  >
-                    <span className="material-symbols-outlined text-[18px]">receipt</span>
-                  </button>
+                  {userRole === 'admin' && (
+                    <button
+                      onClick={() => handleEditPayment(record)}
+                      className="text-text-muted hover:text-primary p-2 hover:bg-gray-100 rounded-full transition-colors"
+                      title="Editar Detalhes"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">edit</span>
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
@@ -1509,52 +1747,6 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId }) => {
     </div>
   );
 
-  const handleSaveEvolution = async (data: any) => {
-    try {
-      if (!currentPatient?.id) return;
-
-      const { data: inserted, error } = await supabase
-        .from('clinical_history')
-        .insert({
-          patient_id: currentPatient.id,
-          date: data.date,
-          title: data.title,
-          doctor: data.doctor,
-          description: data.title, // or description
-          patient_summary: data.patientSummary,
-          clinical_notes: data.clinicalNotes,
-          type: 'procedure', // default
-          status: data.status,
-          tags: [] // if any
-        })
-        .select()
-        .single();
-
-      if (error) throw error;
-
-      const newEvent: HistoryEvent = {
-        id: inserted.id,
-        title: inserted.title,
-        date: formatDate(new Date(inserted.date), { day: '2-digit', month: 'short', year: 'numeric' }),
-        doctor: inserted.doctor,
-        patientSummary: inserted.patient_summary,
-        clinicalNotes: inserted.clinical_notes,
-        icon: 'healing',
-        iconColor: 'text-primary',
-        iconBg: 'bg-primary/10',
-        status: inserted.status,
-        statusColor: 'bg-green-100 text-green-700 border-green-200',
-        description: inserted.patient_summary || inserted.description
-      };
-
-      // Update local state and history data
-      setHistoryData([newEvent, ...historyData]);
-    } catch (error) {
-      console.error('Error saving evolution:', error);
-      alert('Erro ao salvar evolução.');
-    }
-  };
-
   if (loading || !currentPatient) {
     return (
       <div className="flex items-center justify-center h-full animate-fade-in bg-background-light">
@@ -1577,12 +1769,18 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId }) => {
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
           <div className="flex items-center gap-6">
             <div className="relative">
-              <img
-                src={currentPatient.avatar || "https://i.pravatar.cc/150"}
-                alt={patientData.name}
-                className="w-20 h-20 rounded-full object-cover border-4 border-white shadow-md"
-              />
-              <span className="absolute bottom-0 right-0 w-5 h-5 bg-green-500 border-2 border-white rounded-full"></span>
+              {currentPatient.avatar ? (
+                <img
+                  src={currentPatient.avatar}
+                  alt={patientData.name}
+                  className="w-20 h-20 rounded-full object-cover border-4 border-white shadow-md relative bg-gray-200"
+                />
+              ) : (
+                <div className="w-20 h-20 rounded-full bg-gray-100 border-4 border-white shadow-md flex items-center justify-center text-gray-400">
+                  <span className="material-symbols-outlined text-4xl">person</span>
+                </div>
+              )}
+              <span className="absolute bottom-0 right-0 w-5 h-5 bg-green-500 border-2 border-white rounded-full z-10"></span>
             </div>
             <div>
               <h1 className="text-2xl font-serif font-bold text-text-main">{patientData.name}</h1>
@@ -1690,8 +1888,9 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId }) => {
 
       {showEvolutionModal && (
         <NewEvolutionModal
-          onClose={() => setShowEvolutionModal(false)}
+          onClose={() => { setShowEvolutionModal(false); setSelectedEvolution(null); }}
           onSave={handleSaveEvolution}
+          initialData={selectedEvolution}
         />
       )}
 

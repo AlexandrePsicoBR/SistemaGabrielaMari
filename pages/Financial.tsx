@@ -9,6 +9,7 @@ const CATEGORY_COLORS = ['#c3a383', '#eaddcf', '#8a7560', '#161413', '#A88B6E', 
 
 const Financial: React.FC = () => {
   const [showTransactionModal, setShowTransactionModal] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
   const [period, setPeriod] = useState<'monthly' | 'annual'>('monthly');
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -35,7 +36,7 @@ const Financial: React.FC = () => {
           type: t.type,
           category: t.category,
           paymentMethod: t.payment_method,
-          status: t.status as 'Pago' | 'Pendente'
+          status: t.status as any // Allow new statuses
         }));
         setTransactions(mappedTransactions);
       }
@@ -144,6 +145,12 @@ const Financial: React.FC = () => {
     // Refresh list after save
     fetchTransactions();
     setShowTransactionModal(false);
+    setEditingTransaction(null);
+  };
+
+  const handleEditTransaction = (transaction: Transaction) => {
+    setEditingTransaction(transaction);
+    setShowTransactionModal(true);
   };
 
   const handleDeleteTransaction = async (id: string) => {
@@ -299,6 +306,7 @@ const Financial: React.FC = () => {
                 <th className="py-4 px-6 text-xs font-bold text-text-muted uppercase">Data</th>
                 <th className="py-4 px-6 text-xs font-bold text-text-muted uppercase">Descrição</th>
                 <th className="py-4 px-6 text-xs font-bold text-text-muted uppercase">Categoria</th>
+                <th className="py-4 px-6 text-xs font-bold text-text-muted uppercase">Status</th>
                 <th className="py-4 px-6 text-xs font-bold text-text-muted uppercase text-right">Valor</th>
                 <th className="py-4 px-6"></th>
               </tr>
@@ -339,6 +347,18 @@ const Financial: React.FC = () => {
                         {transaction.category}
                       </span>
                     </td>
+                    <td className="py-4 px-6">
+                      <span className={`px-2 py-1 rounded text-xs font-bold border ${transaction.status === 'Pago' || transaction.status === 'Recebido'
+                        ? 'bg-green-100 text-green-700 border-green-200'
+                        : transaction.status === 'Em aberto' || transaction.status === 'Pendente'
+                          ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                          : transaction.status === 'Não pago'
+                            ? 'bg-gray-800 text-white border-gray-700' // Dark Gray
+                            : 'bg-gray-100 text-gray-700'
+                        }`}>
+                        {transaction.status}
+                      </span>
+                    </td>
                     <td className={`py-4 px-6 text-sm font-bold text-right ${transaction.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
                       {transaction.type === 'income' ? '+' : '-'} {formatCurrency(transaction.value)}
                     </td>
@@ -349,6 +369,13 @@ const Financial: React.FC = () => {
                         title="Excluir Transação"
                       >
                         <span className="material-symbols-outlined text-[20px]">delete</span>
+                      </button>
+                      <button
+                        onClick={() => handleEditTransaction(transaction)}
+                        className="p-2 text-text-muted hover:text-primary hover:bg-gray-100 rounded-full transition-colors ml-1"
+                        title="Editar Transação"
+                      >
+                        <span className="material-symbols-outlined text-[20px]">edit</span>
                       </button>
                     </td>
                   </tr>
@@ -361,8 +388,12 @@ const Financial: React.FC = () => {
 
       {showTransactionModal && (
         <NewTransactionModal
-          onClose={() => setShowTransactionModal(false)}
+          onClose={() => {
+            setShowTransactionModal(false);
+            setEditingTransaction(null);
+          }}
           onSave={handleSaveTransaction}
+          initialData={editingTransaction}
         />
       )}
     </div>

@@ -5,13 +5,16 @@ import { DBAppointment } from '../types';
 interface CreateAppointmentParams {
     patientName: string;
     patientPhone?: string;
-    procedure: string; // Added procedure
+    patientId?: string; // Added patientId
+    procedure: string;
     startsAt: Date;
     endsAt: Date;
-    notes?: string;   // Renamed/clarified from description
+    notes?: string;
 }
 
 export const scheduleService = {
+    // ... listEvents and listCalendars remain unchanged
+
     async listEvents(start: Date, end: Date) {
         try {
             const { data: { session } } = await supabase.auth.getSession();
@@ -72,10 +75,8 @@ export const scheduleService = {
         }
     },
 
-    async createAppointment({ patientName, patientPhone, procedure, startsAt, endsAt, notes }: CreateAppointmentParams) {
-        // ... (previous code)
+    async createAppointment({ patientName, patientPhone, patientId, procedure, startsAt, endsAt, notes }: CreateAppointmentParams) {
         try {
-            // ... (previous implementation)
             // 1. Get Session & Provider Token
             const { data: { session } } = await supabase.auth.getSession();
 
@@ -89,7 +90,7 @@ export const scheduleService = {
                 throw new Error('Token do Google não encontrado. Tente fazer Logout e Login novamente com o botão "Conectar Google Calendar".');
             }
 
-            // 2. Find "ESTÉTICA DE SUCESSO" Calendar ID
+            // 2. Find "ATENDIMENTOS GABI" Calendar ID
             const calendarsResponse = await fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList', {
                 headers: { 'Authorization': `Bearer ${providerToken}` }
             });
@@ -137,6 +138,7 @@ export const scheduleService = {
                     ends_at: endsAt.toISOString(),
                     guest_name: patientName,
                     guest_phone: patientPhone,
+                    patient_id: patientId || null, // Added patient_id
                     description: `Procedimento: ${procedure}\n${notes}`, // Keep internal desc for fallback
                     google_event_id: googleEventId,
                 })

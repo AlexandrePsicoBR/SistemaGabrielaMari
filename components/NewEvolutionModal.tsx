@@ -4,9 +4,10 @@ import { supabase } from '../lib/supabase';
 interface ModalProps {
   onClose: () => void;
   onSave: (data: any) => void;
+  initialData?: any;
 }
 
-const NewEvolutionModal: React.FC<ModalProps> = ({ onClose, onSave }) => {
+const NewEvolutionModal: React.FC<ModalProps> = ({ onClose, onSave, initialData }) => {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [procedure, setProcedure] = useState('');
   const [patientNote, setPatientNote] = useState('');
@@ -27,7 +28,7 @@ const NewEvolutionModal: React.FC<ModalProps> = ({ onClose, onSave }) => {
         // Fetch Services
         const { data: servicesData } = await supabase
           .from('services')
-          .select('id, name')
+          .select('id, name, expiration_months')
           .eq('active', true)
           .order('name');
         setServices(servicesData || []);
@@ -47,6 +48,16 @@ const NewEvolutionModal: React.FC<ModalProps> = ({ onClose, onSave }) => {
     };
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (initialData) {
+      setDate(initialData.date);
+      setProcedure(initialData.title); // Assuming title maps to procedure
+      setPatientNote(initialData.patientSummary || '');
+      setTechnicalNote(initialData.clinicalNotes || '');
+      // Note: We are not repopulating consumption list for now as it's complex to track back from history without specific tables
+    }
+  }, [initialData]);
 
   const handleAddConsumption = () => {
     if (!selectedItem || consumptionQty <= 0) return;
@@ -95,7 +106,17 @@ const NewEvolutionModal: React.FC<ModalProps> = ({ onClose, onSave }) => {
       }
     }
 
-    // 2. Save Evolution
+    // 2. Calculate Expiration Date
+    let expirationDate = null;
+    const selectedServiceData = services.find(s => s.name === procedure) as any;
+
+    if (selectedServiceData && selectedServiceData.expiration_months && selectedServiceData.expiration_months > 0) {
+      const d = new Date(date);
+      d.setMonth(d.getMonth() + selectedServiceData.expiration_months);
+      expirationDate = d.toISOString().split('T')[0];
+    }
+
+    // 3. Save Evolution
     onSave({
       date,
       title: procedure || 'Procedimento Estético',
@@ -103,9 +124,15 @@ const NewEvolutionModal: React.FC<ModalProps> = ({ onClose, onSave }) => {
       clinicalNotes: technicalNote,
       doctor: 'Dra. Gabriela Mari', // Default for now
       status: 'Concluído',
+      expiration_date: expirationDate
       // We could ideally attach the consumed items to the history record too if we had a relation table
       // For now, request only specified "updating stock".
     });
+    // Call onClose only if it's a new insertion or if the parent handles closing after save. 
+    // Usually onSave will handle the logic. 
+    // Here we just call onSave and let the parent decide, or close immediately.
+    // For consistency with existing code:
+    onClose();
     onClose();
   };
 
@@ -117,7 +144,7 @@ const NewEvolutionModal: React.FC<ModalProps> = ({ onClose, onSave }) => {
         {/* Header */}
         <div className="px-8 py-5 border-b border-[#e3e0de] flex justify-between items-center bg-white sticky top-0 z-10">
           <div>
-            <h2 className="text-2xl font-serif font-bold text-text-main">Nova Evolução Clínica</h2>
+            <h2 className="text-2xl font-serif font-bold text-text-main">{initialData ? 'Editar Evolução' : 'Nova Evolução Clínica'}</h2>
             <p className="text-sm text-text-muted mt-1">Isabella Rossi</p>
           </div>
           <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100 text-text-muted transition-colors">
@@ -282,7 +309,7 @@ const NewEvolutionModal: React.FC<ModalProps> = ({ onClose, onSave }) => {
           </button>
           <button onClick={handleSave} className="px-8 py-2.5 rounded-lg bg-primary hover:bg-primary-dark text-white font-medium text-sm shadow-lg shadow-primary/20 flex items-center gap-2">
             <span className="material-symbols-outlined text-[18px]">check</span>
-            Salvar Evolução
+            {initialData ? 'Salvar Alterações' : 'Salvar Evolução'}
           </button>
         </div>
 

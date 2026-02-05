@@ -40,6 +40,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectPatient }) =>
   });
 
   const [todayAppointments, setTodayAppointments] = useState<any[]>([]);
+  const [newUsers, setNewUsers] = useState<any[]>([]);
+  const [expirationStats, setExpirationStats] = useState({
+    expired: 0,
+    upcoming: 0,
+    expiredList: [] as any[],
+    upcomingList: [] as any[]
+  });
 
   useEffect(() => {
     // Auth Listener to capture Google Token (it is lost on refresh otherwise)
@@ -143,16 +150,17 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectPatient }) =>
         });
       }
 
-      // 3. Patients Stats
+      // 3. Patients Stats & New Users Logic
       const { data: patientsData } = await supabase
         .from('patients')
-        .select('created_at');
+        .select('id, name, phone, created_at');
 
       if (patientsData) {
         const total = patientsData.length;
         const currentMonth = new Date().getMonth();
         const currentYear = new Date().getFullYear();
 
+        // Stats
         const newThisMonth = patientsData.filter((p: any) => {
           if (!p.created_at) return false;
           const d = new Date(p.created_at);
@@ -160,6 +168,114 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectPatient }) =>
         }).length;
 
         setPatientStats({ total, newThisMonth });
+
+        // NEW USERS BLOCK LOGIC
+        // 1. Filter < 30 days
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+        const recentPatients = patientsData.filter((p: any) => {
+          if (!p.created_at) return false;
+          return new Date(p.created_at) >= thirtyDaysAgo;
+        });
+
+        // 2. Check for clinical history (exclude if present)
+        if (recentPatients.length > 0) {
+          const recentIds = recentPatients.map((p: any) => p.id);
+
+          // Fetch history for these specific patients to exclude them
+          const { data: historyMatches } = await supabase
+            .from('clinical_history')
+            .select('patient_id')
+            .in('patient_id', recentIds);
+
+          const excludedIds = new Set((historyMatches || []).map((h: any) => h.patient_id));
+
+          const finalNewUsers = recentPatients.filter((p: any) => !excludedIds.has(p.id));
+
+          // Sort by most recent
+          finalNewUsers.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+          setNewUsers(finalNewUsers);
+        } else {
+          setNewUsers([]);
+        }
+      }
+      // 4. Expiration Stats
+      const todayDate = new Date();
+      const thirtyDaysFuture = new Date();
+      thirtyDaysFuture.setDate(todayDate.getDate() + 30);
+
+      const todayStr = todayDate.toISOString().split('T')[0];
+      const futureStr = thirtyDaysFuture.toISOString().split('T')[0];
+
+      // A. Fetch Services Metadata for dynamic calculation
+      const { data: servicesData } = await supabase
+        .from('services')
+        .select('name, expiration_months')
+        .gt('expiration_months', 0);
+
+      const serviceMap = new Map();
+      if (servicesData) {
+        servicesData.forEach((s: any) => {
+          serviceMap.set(s.name, s.expiration_months);
+        });
+      }
+
+      // B. Fetch ALL history (we filter in memory now)
+      const { data: expirationData } = await supabase
+        .from('clinical_history')
+        .select(`
+            id, 
+            date, 
+            expiration_date, 
+            title, 
+            patient_id,
+            patients (name, phone)
+         `)
+        .order('date', { ascending: false });
+
+      if (expirationData) {
+        let expiredCount = 0;
+        let upcomingCount = 0;
+        const expiredList: any[] = [];
+        const upcomingList: any[] = [];
+
+        expirationData.forEach((item: any) => {
+          let expDateStr = item.expiration_date;
+
+          // Dynamic Calculation for old records
+          if (!expDateStr && item.title && serviceMap.has(item.title)) {
+            const months = serviceMap.get(item.title);
+            const d = new Date(item.date);
+            d.setMonth(d.getMonth() + months);
+            expDateStr = d.toISOString().split('T')[0];
+            // Attach strict property for the UI to use
+            item.expiration_date = expDateStr;
+          }
+
+          if (!expDateStr) return; // Still no expiration, skip
+
+          // Filter logic (Expired OR (Upcoming <= 30 days && Future))
+          if (expDateStr < todayStr) {
+            expiredCount++;
+            expiredList.push(item);
+          } else if (expDateStr <= futureStr) {
+            upcomingCount++;
+            upcomingList.push(item);
+          }
+        });
+
+        // Sort lists
+        expiredList.sort((a, b) => a.expiration_date.localeCompare(b.expiration_date));
+        upcomingList.sort((a, b) => a.expiration_date.localeCompare(b.expiration_date));
+
+        setExpirationStats({
+          expired: expiredCount,
+          upcoming: upcomingCount,
+          expiredList,
+          upcomingList
+        });
       }
     };
     fetchData();
@@ -192,6 +308,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectPatient }) =>
         totalItems: inventoryStats.totalItems,
         lowStock: inventoryStats.lowStock,
         totalValue: inventoryStats.totalValue
+      },
+      expirations: {
+        expired: expirationStats.expired,
+        upcoming: expirationStats.upcoming,
+        expiredList: expirationStats.expiredList,
+        upcomingList: expirationStats.upcomingList
       }
     };
 
@@ -279,6 +401,40 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectPatient }) =>
                 </div>
             </div>
 
+            <div class="section">
+                <h2>Vencimento de Procedimentos</h2>
+                <div class="stat-grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 20px;">
+                     <div class="stat-box">
+                        <span class="stat-label">Vencidos</span>
+                        <span class="stat-value" style="color: #dc2626;">${reportData.expirations.expired}</span>
+                    </div>
+                    <div class="stat-box">
+                        <span class="stat-label">Vencem em 30 dias</span>
+                        <span class="stat-value" style="color: #eab308;">${reportData.expirations.upcoming}</span>
+                    </div>
+                </div>
+
+                ${reportData.expirations.expired > 0 ? `
+                  <h3 style="font-size: 14px; margin-top: 15px; border-bottom: none; color: #dc2626;">Já Vencidos</h3>
+                  ${reportData.expirations.expiredList.map((item: any) => `
+                    <div class="list-row">
+                       <span style="font-weight:bold;">${item.patients?.name || 'Sem Nome'}</span>
+                       <span>${item.title} (${new Date(item.expiration_date).toLocaleDateString('pt-BR')})</span>
+                    </div>
+                  `).join('')}
+                ` : ''}
+
+                ${reportData.expirations.upcoming > 0 ? `
+                  <h3 style="font-size: 14px; margin-top: 15px; border-bottom: none; color: #eab308;">A Vencer (Próx 30 dias)</h3>
+                  ${reportData.expirations.upcomingList.map((item: any) => `
+                    <div class="list-row">
+                       <span style="font-weight:bold;">${item.patients?.name || 'Sem Nome'}</span>
+                       <span>${item.title} (${new Date(item.expiration_date).toLocaleDateString('pt-BR')})</span>
+                    </div>
+                  `).join('')}
+                ` : ''}
+            </div>
+
             <div class="footer">
                 Documento confidencial para uso interno.
             </div>
@@ -288,6 +444,122 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectPatient }) =>
           </body>
         </html>
     `;
+
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    if (printWindow) {
+      printWindow.document.write(printContent);
+      printWindow.document.close();
+    }
+  };
+
+  const handleGenerateExpirationReport = () => {
+    const reportData = {
+      date: formatDate(new Date()),
+      time: formatTime(new Date()),
+      expired: expirationStats.expiredList,
+      upcoming: expirationStats.upcomingList
+    };
+
+    const printContent = `
+          <html>
+            <head>
+              <title>Relatório de Vencimentos - Gabriela Mari</title>
+              <style>
+                body { font-family: 'Helvetica', sans-serif; padding: 40px; color: #333; max-width: 800px; mx-auto; }
+                .header { text-align: center; margin-bottom: 40px; border-bottom: 2px solid #eab308; padding-bottom: 20px; }
+                h1 { color: #c3a383; margin: 0; font-size: 24px; text-transform: uppercase; letter-spacing: 2px; }
+                .subtitle { color: #7e756d; font-size: 14px; margin-top: 5px; font-weight: bold; text-transform: uppercase; }
+                .meta { font-size: 12px; color: #999; margin-top: 10px; }
+                
+                .section { margin-bottom: 30px; }
+                h2 { font-size: 16px; color: #333; border-bottom: 1px solid #eee; padding-bottom: 8px; margin-bottom: 15px; text-transform: uppercase; }
+                
+                table { w-full; width: 100%; border-collapse: collapse; font-size: 12px; }
+                th { text-align: left; padding: 8px; background: #f9f9f9; border-bottom: 2px solid #eee; color: #555; text-transform: uppercase; font-size: 11px; }
+                td { padding: 8px; border-bottom: 1px solid #eee; vertical-align: middle; }
+                tr:last-child td { border-bottom: none; }
+                
+                .status-badge { padding: 4px 8px; border-radius: 4px; font-weight: bold; font-size: 10px; text-transform: uppercase; display: inline-block; }
+                .status-expired { background: #fee2e2; color: #b91c1c; }
+                .status-upcoming { background: #fef9c3; color: #854d0e; }
+                
+                .footer { margin-top: 60px; font-size: 10px; text-align: center; color: #bbb; border-top: 1px solid #eee; padding-top: 20px; }
+              </style>
+            </head>
+            <body>
+              <div class="header">
+                  <h1>Gabriela Mari</h1>
+                  <div class="subtitle">Relatório de Vencimento de Procedimentos</div>
+                  <div class="meta">Gerado em ${reportData.date} às ${reportData.time}</div>
+              </div>
+
+              ${reportData.expired.length > 0 ? `
+              <div class="section">
+                  <h2 style="color: #dc2626;">Já Vencidos (${reportData.expired.length})</h2>
+                  <table>
+                      <thead>
+                          <tr>
+                              <th>Paciente</th>
+                              <th>Procedimento</th>
+                              <th>Data Vencimento</th>
+                              <th>Telefone</th>
+                          </tr>
+                      </thead>
+                      <tbody>
+                          ${reportData.expired.map((item: any) => `
+                              <tr>
+                                  <td><strong>${item.patients?.name || 'Desconhecido'}</strong></td>
+                                  <td>${item.title}</td>
+                                  <td>${new Date(item.expiration_date).toLocaleDateString('pt-BR')}</td>
+                                  <td>${item.patients?.phone || '-'}</td>
+                              </tr>
+                          `).join('')}
+                      </tbody>
+                  </table>
+              </div>
+              ` : ''}
+
+              ${reportData.upcoming.length > 0 ? `
+              <div class="section">
+                  <h2 style="color: #d97706;">A Vencer (Próximos 30 dias) (${reportData.upcoming.length})</h2>
+                  <table>
+                      <thead>
+                          <tr>
+                              <th>Paciente</th>
+                              <th>Procedimento</th>
+                              <th>Data Vencimento</th>
+                              <th>Telefone</th>
+                          </tr>
+                      </thead>
+                      <tbody>
+                          ${reportData.upcoming.map((item: any) => `
+                              <tr>
+                                  <td><strong>${item.patients?.name || 'Desconhecido'}</strong></td>
+                                  <td>${item.title}</td>
+                                  <td>${new Date(item.expiration_date).toLocaleDateString('pt-BR')}</td>
+                                  <td>${item.patients?.phone || '-'}</td>
+                              </tr>
+                          `).join('')}
+                      </tbody>
+                  </table>
+              </div>
+              ` : ''}
+              
+              ${reportData.expired.length === 0 && reportData.upcoming.length === 0 ? `
+                  <div style="text-align: center; padding: 40px; color: #999;">
+                      <p>Nenhum procedimento vencido ou a vencer nos próximos 30 dias.</p>
+                  </div>
+              ` : ''}
+
+              <div class="footer">
+                  Documento confidencial para uso interno.
+              </div>
+              <script>
+                  window.onload = function() { window.print(); }
+              </script>
+            </body>
+          </html>
+      `;
 
     const printWindow = window.open('', '_blank', 'width=800,height=600');
     if (printWindow) {
@@ -329,7 +601,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectPatient }) =>
       {/* KPI Cards */}
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* Card 1: Consultas Hoje */}
         <div
           onClick={() => {
@@ -393,6 +665,37 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectPatient }) =>
           <div>
             <p className="text-text-muted text-sm font-medium">Produtos com Estoque Baixo</p>
             <p className="text-3xl font-serif font-bold text-text-main mt-1">{inventoryStats.lowStock}</p>
+          </div>
+        </div>
+
+        {/* Card 4: Procedimentos Vencidos */}
+        <div
+          onClick={handleGenerateExpirationReport}
+          className="bg-white p-6 rounded-2xl shadow-sm border border-[#f3f2f1] relative overflow-hidden group hover:shadow-md transition-all cursor-pointer"
+        >
+          <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+            <span className="material-symbols-outlined text-6xl text-orange-500">history_toggle_off</span>
+          </div>
+          <div className="flex justify-between items-start mb-4">
+            <div className="p-2 bg-background-light rounded-lg border border-gray-100">
+              <span className="material-symbols-outlined text-orange-600">alarm_on</span>
+            </div>
+            {expirationStats.expired > 0 && (
+              <span className="bg-red-100 text-red-700 text-xs font-bold px-2 py-1 rounded-full uppercase tracking-wider animate-pulse">
+                Atenção
+              </span>
+            )}
+          </div>
+          <div>
+            <p className="text-text-muted text-sm font-medium">Procedimentos Vencidos</p>
+            <div className="flex items-end gap-2 mt-1">
+              <p className={`text-3xl font-serif font-bold ${expirationStats.expired > 0 ? 'text-red-600' : 'text-text-main'}`}>
+                {expirationStats.expired}
+              </p>
+              <span className="text-xs text-text-muted mb-1.5 font-medium">
+                + {expirationStats.upcoming} em 30 dias
+              </span>
+            </div>
           </div>
         </div>
       </div>
@@ -466,6 +769,72 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectPatient }) =>
           )}
 
 
+        </div>
+      </div>
+
+      {/* New Users Block */}
+      <div className="bg-white rounded-2xl shadow-sm border border-[#f3f2f1] overflow-hidden">
+        <div className="p-6 border-b border-[#f3f2f1] flex justify-between items-center bg-white sticky top-0 z-10">
+          <h3 className="font-serif font-bold text-lg text-gray-900 flex items-center gap-2">
+            <span className="material-symbols-outlined text-purple-600">person_add</span>
+            Novos Usuários
+          </h3>
+          <span className="text-xs text-text-muted bg-gray-100 px-2 py-1 rounded-full">
+            Últimos 30 dias (Sem evolução)
+          </span>
+        </div>
+
+        <div className="divide-y divide-[#f3f2f1]">
+          {newUsers.length === 0 ? (
+            <div className="p-8 text-center text-text-muted">
+              <p>Nenhum novo usuário pendente encontrado.</p>
+            </div>
+          ) : (
+            newUsers.map((user: any) => (
+              <div
+                key={user.id}
+                className="p-4 hover:bg-gray-50 transition-colors flex flex-col md:flex-row md:items-center gap-4 group cursor-pointer"
+                onClick={() => onSelectPatient(user.id)}
+              >
+                {/* Date Badge */}
+                <div className="w-24 text-center border-r border-gray-100 pr-4">
+                  <span className="block text-2xl font-bold text-gray-800">
+                    {new Date(user.created_at).getDate()}
+                  </span>
+                  <span className="block text-xs uppercase text-text-muted font-bold">
+                    {new Date(user.created_at).toLocaleString('default', { month: 'short' })}
+                  </span>
+                </div>
+
+                {/* User Info */}
+                <div className="flex-1 flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center font-bold text-sm">
+                    {user.name.substring(0, 2).toUpperCase()}
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-text-main text-sm">{user.name}</h4>
+                    <p className="text-xs text-text-muted">Cadastrado há {Math.floor((new Date().getTime() - new Date(user.created_at).getTime()) / (1000 * 60 * 60 * 24))} dias</p>
+                  </div>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      const message = `Olá ${user.name}, tudo bem? Aqui é do consultório da Dra. Gabriela Mari.`;
+                      window.open(`https://wa.me/55${user.phone}?text=${encodeURIComponent(message)}`, '_blank');
+                    }}
+                    className="p-2 bg-green-50 text-green-600 rounded-lg hover:bg-green-100 transition-colors"
+                    title="Chamar no WhatsApp"
+                  >
+                    <span className="material-symbols-outlined">chat</span>
+                  </button>
+                  <span className="material-symbols-outlined text-gray-300 group-hover:text-primary transition-colors">arrow_forward_ios</span>
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
 

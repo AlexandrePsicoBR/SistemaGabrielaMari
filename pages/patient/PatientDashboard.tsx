@@ -12,7 +12,7 @@ interface PatientDashboardProps {
 
 const PatientDashboard: React.FC<PatientDashboardProps> = ({ onNavigate }) => {
     const [patientName, setPatientName] = useState('Paciente');
-    const [latestNews, setLatestNews] = useState<any>(null);
+    const [recentPosts, setRecentPosts] = useState<any[]>([]); // Changed from latestNews
     const [lastConsultation, setLastConsultation] = useState<any>(null);
     const [lastPhoto, setLastPhoto] = useState<any>(null);
 
@@ -22,6 +22,8 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({ onNavigate }) => {
     const [lastConsultationDate, setLastConsultationDate] = useState('-');
 
     const [loading, setLoading] = useState(true);
+
+    const [expiredProcedures, setExpiredProcedures] = useState<any[]>([]);
 
     useEffect(() => {
         const fetchDashboardData = async () => {
@@ -39,6 +41,20 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({ onNavigate }) => {
                 if (patient) {
                     setPatientName(patient.name.split(' ')[0]);
 
+                    // --- Fetch Service Metadata for Expiration ---
+                    const { data: servicesData } = await supabase
+                        .from('services')
+                        .select('name, expiration_months')
+                        .gt('expiration_months', 0);
+
+                    const serviceMap = new Map();
+                    if (servicesData) {
+                        servicesData.forEach((s: any) => {
+                            serviceMap.set(s.name.trim().toLowerCase(), s.expiration_months);
+                        });
+                    }
+                    // ---------------------------------------------
+
                     // --- Restored Counts Logic ---
                     const { count: consults } = await supabase
                         .from('clinical_history')
@@ -53,30 +69,61 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({ onNavigate }) => {
                     setPhotoCount(photos || 0);
                     // -----------------------------
 
-                    // 1. Latest News
+                    // 1. Latest News (Fetch 3)
                     const { data: news } = await supabase
                         .from('blog_posts')
                         .select('*')
                         .eq('status', 'Publicado')
                         .order('created_at', { ascending: false })
-                        .limit(1)
-                        .single();
-                    setLatestNews(news);
+                        .limit(3);
+                    setRecentPosts(news || []);
 
-                    // 2. Last Consultation
-                    const { data: consultation } = await supabase
+                    // 2. Last Consultation & Full History for Expiration
+                    const { data: allHistory } = await supabase
                         .from('clinical_history')
                         .select('*')
                         .eq('patient_id', patient.id)
-                        .order('date', { ascending: false })
-                        .limit(1)
-                        .single();
-                    setLastConsultation(consultation);
+                        .order('date', { ascending: false });
 
-                    if (consultation) {
-                        const dateObj = new Date(consultation.date);
+                    if (allHistory && allHistory.length > 0) {
+                        setLastConsultation(allHistory[0]);
+                        const dateObj = new Date(allHistory[0].date);
                         setLastConsultationDate(formatDate(dateObj, { day: 'numeric', month: 'short' }).replace('.', ''));
+
+                        // --- Calculate Expirations ---
+                        const today = new Date();
+                        const thirtyDays = new Date();
+                        thirtyDays.setDate(today.getDate() + 30);
+                        const todayStr = today.toISOString().split('T')[0];
+                        const thirtyDaysStr = thirtyDays.toISOString().split('T')[0];
+
+                        const expirations = allHistory.filter((h: any) => {
+                            let expDateStr = h.expiration_date;
+
+                            // Dynamic Calculation if missing
+                            if (!expDateStr && h.title) {
+                                const normalizedTitle = h.title.trim().toLowerCase();
+                                if (serviceMap.has(normalizedTitle)) {
+                                    const months = serviceMap.get(normalizedTitle);
+                                    const d = new Date(h.date);
+                                    d.setMonth(d.getMonth() + months);
+                                    expDateStr = d.toISOString().split('T')[0];
+                                }
+                            }
+
+                            if (!expDateStr) return false;
+
+                            // Attach calculated date for rendering
+                            h.expirationDate = expDateStr;
+
+                            // Logic: Show if expired OR expiring in next 30 days
+                            return expDateStr <= thirtyDaysStr;
+                        }).sort((a: any, b: any) => new Date(a.expirationDate).getTime() - new Date(b.expirationDate).getTime());
+
+                        setExpiredProcedures(expirations);
+                        // -----------------------------
                     }
+
 
                     // 3. Last Photo
                     const { data: photo } = await supabase
@@ -148,13 +195,13 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({ onNavigate }) => {
 
                         {/* 1. News & Promotions (Priority 1) */}
                         <div className="bg-white rounded-2xl border border-[#eceae8] shadow-sm overflow-hidden hover:shadow-md transition-all duration-300">
-                            {latestNews ? (
+                            {recentPosts.length > 0 ? (
                                 <div className="flex flex-col md:flex-row">
                                     <div className="w-full md:w-1/3 overflow-hidden">
                                         <img
-                                            alt={latestNews.title}
+                                            alt={recentPosts[0].title}
                                             className="w-full h-48 md:h-full object-cover hover:scale-105 transition-transform duration-500"
-                                            src={latestNews.image_url || "https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"}
+                                            src={recentPosts[0].image_url || "https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80"}
                                         />
                                     </div>
                                     <div className="w-full md:w-2/3 p-6 md:p-8 flex flex-col justify-center gap-4">
@@ -162,9 +209,9 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({ onNavigate }) => {
                                             <span className="bg-primary/10 text-primary px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest">Destaque</span>
                                             <span className="text-text-muted text-xs font-semibold">News e Promoções</span>
                                         </div>
-                                        <h3 className="text-xl font-bold text-text-main leading-tight font-display">{latestNews.title}</h3>
+                                        <h3 className="text-xl font-bold text-text-main leading-tight font-display">{recentPosts[0].title}</h3>
                                         <p className="text-text-muted text-sm line-clamp-3">
-                                            {latestNews.content}
+                                            {recentPosts[0].content}
                                         </p>
                                         <div className="mt-2">
                                             <button
@@ -218,6 +265,57 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({ onNavigate }) => {
                                         <button onClick={() => window.open('https://wa.me/5512987029253', '_blank')} className="mt-4 text-primary font-bold text-sm hover:underline">
                                             Agendar agora
                                         </button>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+
+                        {/* NEW POSITION: Expiration Block (After Last Consultation) */}
+                        <div className="bg-white rounded-2xl border border-[#eceae8] shadow-sm overflow-hidden hover:shadow-md transition-all duration-300">
+                            <div className="p-6 border-b border-[#eceae8] flex justify-between items-center bg-orange-50">
+                                <div className="flex items-center gap-2">
+                                    <span className="material-symbols-outlined text-orange-600">alarm_on</span>
+                                    <h3 className="font-bold text-gray-900 text-lg">Vencimento de Procedimentos</h3>
+                                </div>
+                                <span className="px-2 py-1 bg-white rounded text-xs font-bold text-orange-600 border border-orange-200">Próximos 30 dias</span>
+                            </div>
+                            <div className="divide-y divide-[#eceae8]">
+                                {expiredProcedures.length > 0 ? (
+                                    expiredProcedures.map((proc, idx) => {
+                                        const expDate = new Date(proc.expirationDate);
+                                        const today = new Date();
+                                        const isExpired = proc.expirationDate < new Date().toISOString().split('T')[0];
+
+                                        return (
+                                            <div key={idx} className="p-5 flex flex-col md:flex-row items-start md:items-center justify-between hover:bg-background-light transition-colors gap-4">
+                                                <div className="flex items-center gap-4">
+                                                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-white flex-shrink-0 ${isExpired ? 'bg-red-500' : 'bg-orange-500'}`}>
+                                                        <span className="material-symbols-outlined">history_toggle_off</span>
+                                                    </div>
+                                                    <div>
+                                                        <p className="font-bold text-text-main">{proc.title}</p>
+                                                        <p className={`text-xs mt-0.5 font-bold ${isExpired ? 'text-red-600' : 'text-orange-600'}`}>
+                                                            {isExpired ? 'Vencido em: ' : 'Vence em: '} {formatDate(expDate)}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                <div className="w-full md:w-auto text-right">
+                                                    <button
+                                                        onClick={() => {
+                                                            const message = `Olá, gostaria de agendar o retorno do procedimento ${proc.title} que ${isExpired ? 'venceu' : 'vence'} em ${formatDate(expDate)}.`;
+                                                            window.open(`https://wa.me/5512987029253?text=${encodeURIComponent(message)}`, '_blank');
+                                                        }}
+                                                        className="w-full md:w-auto text-primary text-sm font-bold border border-primary px-4 py-2 rounded-lg hover:bg-primary hover:text-white transition-colors flex items-center justify-center gap-2"
+                                                    >
+                                                        <span className="material-symbols-outlined text-sm">calendar_add_on</span> Reagendar
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        );
+                                    })
+                                ) : (
+                                    <div className="p-8 text-center text-text-muted">
+                                        <p>Nenhum procedimento próximo do vencimento.</p>
                                     </div>
                                 )}
                             </div>
@@ -310,6 +408,46 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({ onNavigate }) => {
                                         <span className="text-sm font-medium text-text-main">Fale com a Gabriela</span>
                                     </div>
                                     <span className="material-symbols-outlined text-text-muted group-hover:text-primary text-[20px]">chevron_right</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        {/* Sidebar - Recent Posts Block */}
+                        <div className="bg-white border border-[#eceae8] rounded-xl p-6 shadow-sm flex flex-col">
+                            <div className="mb-6">
+                                <h3 className="font-bold text-gray-900 text-lg font-display">Últimas Postagens</h3>
+                                <div className="h-1 w-12 bg-primary rounded-full mt-1"></div>
+                            </div>
+
+                            <div className="flex flex-col gap-4">
+                                {recentPosts.length > 0 ? (
+                                    recentPosts.map((post, idx) => (
+                                        <div key={idx} className="flex gap-4 group cursor-pointer" onClick={() => onNavigate?.('patient-news')}>
+                                            <div className="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0 bg-gray-100">
+                                                <img
+                                                    src={post.image_url || "https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?ixlib=rb-4.0.3&auto=format&fit=crop&w=200&q=80"}
+                                                    alt={post.title}
+                                                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                                                />
+                                            </div>
+                                            <div className="flex flex-col justify-between py-1">
+                                                <h4 className="font-bold text-sm text-text-main leading-snug group-hover:text-primary transition-colors line-clamp-2">
+                                                    {post.title}
+                                                </h4>
+                                                <span className="text-xs text-text-muted">{formatDate(post.created_at)}</span>
+                                            </div>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <p className="text-center text-text-muted text-sm py-4">Nenhuma postagem recente.</p>
+                                )}
+
+                                <button
+                                    onClick={() => onNavigate?.('patient-news')}
+                                    className="mt-2 w-full text-primary font-bold text-sm hover:underline flex items-center justify-center gap-1"
+                                >
+                                    Ver todas as novidades
+                                    <span className="material-symbols-outlined text-lg">arrow_forward</span>
                                 </button>
                             </div>
                         </div>

@@ -17,6 +17,7 @@ const NewServiceModal: React.FC<ModalProps> = ({ onClose, initialData }) => {
     price: initialData?.price || 0,
     description: initialData?.description || '',
     active: initialData ? initialData.active : true,
+    expiration_months: initialData?.expiration_months || 0
   });
 
   const handleChange = (field: keyof Service, value: any) => {
@@ -37,7 +38,8 @@ const NewServiceModal: React.FC<ModalProps> = ({ onClose, initialData }) => {
         price: Number(formData.price), // Ensure number
         duration: Number(formData.duration),
         description: formData.description,
-        active: formData.active
+        active: formData.active,
+        expiration_months: formData.expiration_months
       };
 
       if (isEditing && initialData) {
@@ -144,6 +146,22 @@ const NewServiceModal: React.FC<ModalProps> = ({ onClose, initialData }) => {
               className="w-full h-24 p-3 rounded-lg bg-white border border-[#e3e0de] focus:ring-1 focus:ring-primary focus:border-primary outline-none resize-none text-sm text-gray-900 placeholder:text-gray-400"
               placeholder="Breve descrição do procedimento..."
             ></textarea>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold uppercase tracking-wide text-text-muted">Vencimento (Meses)</label>
+            <div className="relative">
+              <input
+                type="number"
+                min="0"
+                value={formData.expiration_months || ''}
+                onChange={(e) => handleChange('expiration_months', parseInt(e.target.value) || 0)}
+                className="w-full h-10 px-3 rounded-lg bg-white border border-[#e3e0de] focus:ring-1 focus:ring-primary focus:border-primary outline-none text-sm text-gray-900 placeholder:text-gray-400"
+                placeholder="Ex: 6 (para 6 meses)"
+              />
+              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-text-muted text-xs pointer-events-none">meses</span>
+            </div>
+            <p className="text-[10px] text-text-muted">Deixe em branco ou 0 se não houver validade.</p>
           </div>
 
 
