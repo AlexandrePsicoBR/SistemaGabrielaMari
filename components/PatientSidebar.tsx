@@ -38,6 +38,7 @@ const PatientSidebar: React.FC<PatientSidebarProps> = ({
     const menuItems: { id: View; label: string; icon: string }[] = [
         { id: 'patient-dashboard', label: 'Início', icon: 'home' },
         { id: 'patient-appointments', label: 'Minhas Consultas', icon: 'calendar_today' },
+        { id: 'patient-documents', label: 'Documentos', icon: 'description' },
         { id: 'patient-history', label: 'Histórico de fotos', icon: 'photo_library' },
         { id: 'patient-news', label: 'News e Promoções', icon: 'newspaper' },
         { id: 'patient-profile', label: 'Meu Perfil', icon: 'person' },

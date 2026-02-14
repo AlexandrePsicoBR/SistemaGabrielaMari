@@ -12,15 +12,15 @@ interface TermoLiftingProps {
 
         alergias?: string | string[];
     };
+    signatureUrl?: string | null;
+    signatureDate?: string;
 }
 
-const TermoLifting: React.FC<TermoLiftingProps> = ({ paciente }) => {
+const TermoLifting: React.FC<TermoLiftingProps> = ({ paciente, signatureUrl, signatureDate }) => {
     // Data formatada (ex: 27 de Janeiro de 2026)
-    const dataHoje = formatDate(new Date(), {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric'
-    });
+    const dataHoje = signatureDate
+        ? formatDate(new Date(signatureDate), { day: 'numeric', month: 'long', year: 'numeric' })
+        : formatDate(new Date(), { day: 'numeric', month: 'long', year: 'numeric' });
 
     // Lógica para preencher alergias
     const textoAlergias = Array.isArray(paciente.alergias)
@@ -176,16 +176,23 @@ const TermoLifting: React.FC<TermoLiftingProps> = ({ paciente }) => {
             </div>
 
             {/* ASSINATURAS */}
-            <div className="mt-8 break-inside-avoid">
-                <div className="flex justify-between items-end gap-10 mb-8">
-                    <div className="w-1/2">
-                        <p className="border-b border-black mb-1"></p>
+            <div className="mt-16 break-inside-avoid">
+                <div className="flex justify-between items-end gap-10 mb-8 relative">
+                    <div className="w-1/2 relative">
+                        {signatureUrl && (
+                            <img
+                                src={signatureUrl}
+                                alt="Assinatura"
+                                className="absolute bottom-6 left-0 max-h-24 mix-blend-multiply"
+                            />
+                        )}
+                        <p className="border-b border-black mb-1 mt-12"></p>
                         <p className="text-xs">Assinatura</p>
                     </div>
                 </div>
 
                 <p className="text-right">
-                    São Paulo, <span className="inline-block border-b border-black min-w-[150px] text-center">{dataHoje}</span>.
+                    São Paulo, <span>{dataHoje}</span>.
                 </p>
             </div>
 

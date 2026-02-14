@@ -12,11 +12,15 @@ interface TermoIntradermoProps {
 
         alergias?: string | string[]; // Array de alergias (opcional)
     };
+    signatureUrl?: string | null;
+    signatureDate?: string;
 }
 
-const TermoIntradermo: React.FC<TermoIntradermoProps> = ({ paciente }) => {
+const TermoIntradermo: React.FC<TermoIntradermoProps> = ({ paciente, signatureUrl, signatureDate }) => {
     // Pega a data de hoje formatada (ex: 27/01/2026)
-    const dataHoje = formatDate(new Date());
+    const dataHoje = signatureDate
+        ? formatDate(new Date(signatureDate))
+        : formatDate(new Date());
 
     // Lógica para preencher o campo de alergias
     // Lógica para preencher o campo de alergias
@@ -88,7 +92,7 @@ const TermoIntradermo: React.FC<TermoIntradermoProps> = ({ paciente }) => {
             </div>
 
             {/* ASSINATURAS */}
-            <div className="flex justify-between items-end mt-16 gap-10">
+            <div className="flex justify-between items-end mt-16 gap-10 break-inside-avoid">
                 <div className="w-1/2 text-center">
                     <div className="border-t border-black pt-2">
                         <p className="font-bold">Gabriela Mari</p>
@@ -97,7 +101,14 @@ const TermoIntradermo: React.FC<TermoIntradermoProps> = ({ paciente }) => {
                     </div>
                 </div>
 
-                <div className="w-1/2 text-center">
+                <div className="w-1/2 text-center relative">
+                    {signatureUrl && (
+                        <img
+                            src={signatureUrl}
+                            alt="Assinatura"
+                            className="absolute bottom-12 left-1/2 transform -translate-x-1/2 max-h-16 mix-blend-multiply"
+                        />
+                    )}
                     <div className="border-t border-black pt-2">
                         <p className="font-bold uppercase">{paciente.nome}</p>
                         <p className="text-xs text-gray-600">Assinatura do(a) paciente</p>

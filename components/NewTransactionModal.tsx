@@ -6,6 +6,7 @@ export interface Transaction {
   description: string;
   patientName?: string;
   value: number;
+  cost?: number; // New optional field
   date: string;
   type: 'income' | 'expense';
   category: string;
@@ -36,6 +37,7 @@ const NewTransactionModal: React.FC<ModalProps> = ({ onClose, onSave, initialDat
     description: '',
     patientName: '',
     value: '',
+    cost: '', // New state for cost
     date: new Date().toISOString().split('T')[0],
     category: '',
     paymentMethod: '',
@@ -64,6 +66,7 @@ const NewTransactionModal: React.FC<ModalProps> = ({ onClose, onSave, initialDat
         description: initialData.description,
         patientName: initialData.patientName || '',
         value: initialData.value.toString(),
+        cost: initialData.cost ? initialData.cost.toString() : '', // Load cost
         date: initialData.date,
         category: initialData.category,
         paymentMethod: initialData.paymentMethod || '',
@@ -138,8 +141,10 @@ const NewTransactionModal: React.FC<ModalProps> = ({ onClose, onSave, initialDat
 
         const payload = {
           description: formData.description + descriptionSuffix,
-          patient_name: type === 'income' ? (formData.patientName || null) : null,
+          // Allow linking expense to patient if selected
+          patient_name: formData.patientName || null,
           value: Number(formData.value),
+          cost: Number(formData.cost) || 0, // Save Cost
           date: dateString,
           type: type,
           category: formData.category || 'Outros',
@@ -210,41 +215,40 @@ const NewTransactionModal: React.FC<ModalProps> = ({ onClose, onSave, initialDat
             </button>
           </div>
 
-          {/* Campo Paciente - Apenas para Receitas */}
-          {type === 'income' && (
-            <div className="space-y-1.5 animate-fade-in">
-              <label className="text-xs font-bold uppercase tracking-wide text-text-muted">Paciente</label>
-              <div className="relative">
-                <input
-                  name="patientName"
-                  value={formData.patientName}
-                  onChange={handleChange}
-                  onFocus={() => setShowSuggestions(true)}
-                  onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-                  type="text"
-                  autoComplete="off"
-                  className="w-full h-10 px-3 pl-9 rounded-lg bg-white border border-[#e3e0de] focus:ring-1 focus:ring-primary focus:border-primary outline-none text-sm text-gray-900 placeholder:text-gray-400"
-                  placeholder="Selecione ou digite o nome..."
-                />
-                <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[18px]">person</span>
+          <div className="space-y-1.5 animate-fade-in">
+            <label className="text-xs font-bold uppercase tracking-wide text-text-muted">
+              Paciente {type === 'expense' && '(Opcional)'}
+            </label>
+            <div className="relative">
+              <input
+                name="patientName"
+                value={formData.patientName}
+                onChange={handleChange}
+                onFocus={() => setShowSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                type="text"
+                autoComplete="off"
+                className="w-full h-10 px-3 pl-9 rounded-lg bg-white border border-[#e3e0de] focus:ring-1 focus:ring-primary focus:border-primary outline-none text-sm text-gray-900 placeholder:text-gray-400"
+                placeholder={type === 'income' ? "Selecione o paciente..." : "Vincular a um paciente (opcional)..."}
+              />
+              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-[18px]">person</span>
 
-                {/* Autocomplete Dropdown */}
-                {showSuggestions && filteredPatients.length > 0 && (
-                  <ul className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-y-auto">
-                    {filteredPatients.map(patient => (
-                      <li
-                        key={patient.id}
-                        onClick={() => selectPatient(patient.name)}
-                        className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer transition-colors"
-                      >
-                        {patient.name}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+              {/* Autocomplete Dropdown */}
+              {showSuggestions && filteredPatients.length > 0 && (
+                <ul className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-48 overflow-y-auto">
+                  {filteredPatients.map(patient => (
+                    <li
+                      key={patient.id}
+                      onClick={() => selectPatient(patient.name)}
+                      className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer transition-colors"
+                    >
+                      {patient.name}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
-          )}
+          </div>
 
           <div className="space-y-1.5">
             <label className="text-xs font-bold uppercase tracking-wide text-text-muted">Descrição</label>
@@ -270,6 +274,37 @@ const NewTransactionModal: React.FC<ModalProps> = ({ onClose, onSave, initialDat
                 placeholder="0,00"
               />
             </div>
+
+            {/* COST FIELD */}
+            {type === 'income' && (
+              <div className="space-y-1.5 animate-fade-in">
+                <label className="text-xs font-bold uppercase tracking-wide text-text-muted">Custo (R$)</label>
+                <input
+                  name="cost"
+                  value={formData.cost}
+                  onChange={handleChange}
+                  type="number"
+                  className="w-full h-10 px-3 rounded-lg bg-white border border-[#e3e0de] focus:ring-1 focus:ring-primary focus:border-primary outline-none text-sm text-gray-900 placeholder:text-gray-400"
+                  placeholder="0,00"
+                />
+              </div>
+            )}
+
+            {type === 'expense' && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold uppercase tracking-wide text-text-muted">Data</label>
+                <input
+                  name="date"
+                  value={formData.date}
+                  onChange={handleChange}
+                  type="date"
+                  className="w-full h-10 px-3 rounded-lg bg-white border border-[#e3e0de] focus:ring-1 focus:ring-primary focus:border-primary outline-none text-sm text-gray-900"
+                />
+              </div>
+            )}
+          </div>
+
+          {type === 'income' && (
             <div className="space-y-1.5">
               <label className="text-xs font-bold uppercase tracking-wide text-text-muted">Data</label>
               <input
@@ -280,7 +315,7 @@ const NewTransactionModal: React.FC<ModalProps> = ({ onClose, onSave, initialDat
                 className="w-full h-10 px-3 rounded-lg bg-white border border-[#e3e0de] focus:ring-1 focus:ring-primary focus:border-primary outline-none text-sm text-gray-900"
               />
             </div>
-          </div>
+          )}
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">

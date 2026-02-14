@@ -52,8 +52,28 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
   const [loading, setLoading] = useState(true);
   const [historyData, setHistoryData] = useState<HistoryEvent[]>([]);
   const [selectedEvolution, setSelectedEvolution] = useState<any>(null); // For editing
+  const [sendingRequest, setSendingRequest] = useState<string | null>(null);
 
   // Update state when patientId changes
+  const getSignedUrlHelper = async (pathOrUrl: string) => {
+    if (!pathOrUrl) return '';
+    let path = pathOrUrl;
+    if (pathOrUrl.startsWith('http')) {
+      const parts = pathOrUrl.split('fotos-pacientes/');
+      if (parts.length > 1) path = parts[1].split('?')[0];
+      else return pathOrUrl;
+    }
+    try {
+      const { data } = await supabase.storage
+        .from('fotos-pacientes')
+        .createSignedUrl(path, 3600);
+      return data?.signedUrl || pathOrUrl;
+    } catch (e) {
+      console.error('Error signing URL:', e);
+      return pathOrUrl;
+    }
+  };
+
   useEffect(() => {
     const fetchPatientData = async () => {
       if (!patientId) return;
@@ -70,22 +90,7 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
 
         if (patientError) throw patientError;
 
-        // Helper to get signed URL
-        const getSignedURL = async (pathOrUrl: string) => {
-          if (!pathOrUrl) return '';
-          let path = pathOrUrl;
-          if (pathOrUrl.startsWith('http')) {
-            const parts = pathOrUrl.split('fotos-pacientes/');
-            if (parts.length > 1) path = parts[1];
-            else return pathOrUrl; // Assume valid if no split match
-          }
-          const { data } = await supabase.storage
-            .from('fotos-pacientes')
-            .createSignedUrl(path, 3600);
-          return data?.signedUrl || pathOrUrl;
-        };
-
-        const avatarUrl = await getSignedURL(patient.avatar_url);
+        const avatarUrl = await getSignedUrlHelper(patient.avatar_url);
 
         // Map DB fields to UI fields (snake_case to camelCase where needed)
         const mappedPatient = {
@@ -143,11 +148,11 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
           return {
             id: h.id,
             title: h.title,
-            date: formatDate(new Date(h.date), { day: '2-digit', month: 'short', year: 'numeric' }), // Formatting needs to match UI expectation or keep as ISO
-            isoDate: h.date, // Keep original ISO date for editing
+            date: formatDate(new Date(h.date), { day: '2-digit', month: 'short', year: 'numeric' }),
+            isoDate: h.date,
             doctor: h.doctor || 'Dra. Gabriela Mari',
             icon: h.type === 'procedure' ? 'face' : 'medical_services',
-            iconColor: 'text-primary', // Default styling for now
+            iconColor: 'text-primary',
             iconBg: 'bg-primary/10',
             status: h.status || 'Concluído',
             statusColor: 'bg-green-100 text-green-700 border-green-200',
@@ -171,30 +176,12 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
         if (photosError) throw photosError;
 
         const mappedPhotos = await Promise.all((photos || []).map(async (p: any) => {
-          const getSigned = async (pathOrUrl: string) => {
-            if (!pathOrUrl) return '';
-            // If it's a full URL, try to extract path (simple logic: last segment? No, bucket path)
-            // But simplest is: if strictly not http, treat as path.
-            // If http, split by 'fotos-pacientes/'
-            let path = pathOrUrl;
-            if (pathOrUrl.startsWith('http')) {
-              const parts = pathOrUrl.split('fotos-pacientes/');
-              if (parts.length > 1) path = parts[1];
-            }
-
-            const { data } = await supabase.storage
-              .from('fotos-pacientes')
-              .createSignedUrl(path, 3600); // 1 hour
-
-            return data?.signedUrl || pathOrUrl;
-          };
-
           return {
             id: p.id,
             title: p.title || 'Foto',
             date: p.date || p.created_at,
-            beforeUrl: await getSigned(p.before_url),
-            afterUrl: await getSigned(p.after_url),
+            beforeUrl: await getSignedUrlHelper(p.before_url),
+            afterUrl: await getSignedUrlHelper(p.after_url),
             description: p.description
           };
         }));
@@ -218,19 +205,21 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
           category: f.category,
           paymentMethod: f.payment_method,
           status: f.status,
-          patientName: f.patient_name
+          patientName: f.patient_name,
+          cost: Number(f.cost) || 0
         }));
 
         setFinancialRecords(mappedFinancial);
 
-        // 5. Fetch Signed Documents
+        // 5. Fetch Patient Documents
         const { data: docs, error: docsError } = await supabase
           .from('patient_documents')
-          .select('document_type')
-          .eq('patient_id', patientId);
+          .select('*')
+          .eq('patient_id', patientId)
+          .order('created_at', { ascending: false });
 
         if (docsError) throw docsError;
-        setSignedDocuments((docs || []).map((d: any) => d.document_type));
+        setPatientDocuments(docs || []);
 
       } catch (error) {
         console.error('Error fetching patient details:', error);
@@ -257,9 +246,11 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
 
   const [showDocumentModal, setShowDocumentModal] = useState(false);
   const [selectedDocument, setSelectedDocument] = useState<string | null>(null);
+  const [viewingSignedDoc, setViewingSignedDoc] = useState<any>(null); // For viewing signed docs
+  const [currentSignatureUrl, setCurrentSignatureUrl] = useState<string | null>(null);
 
   const [expandedEvents, setExpandedEvents] = useState<string[]>(['1']);
-  const [signedDocuments, setSignedDocuments] = useState<string[]>([]); // Array of document types that are signed
+  const [patientDocuments, setPatientDocuments] = useState<any[]>([]);
 
   // const historyData: HistoryEvent[] = currentPatient.history || []; // Replaced by state
 
@@ -481,48 +472,57 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
     );
   };
 
-  const handleAddPhoto = async (entry: PhotoEntry) => {
+  const handleAddPhoto = async (entries: PhotoEntry[]) => {
     try {
       if (!currentPatient?.id) return;
 
-      const { data, error } = await supabase
-        .from('patient_photos')
-        .insert({
-          patient_id: currentPatient.id,
-          title: entry.title,
-          description: entry.description,
-          before_url: entry.beforeUrl,
-          after_url: entry.afterUrl,
-          date: entry.date
-        })
-        .select()
-        .single();
+      const savedEntries: PhotoEntry[] = [];
 
-      if (error) throw error;
+      // Process sequentially or in parallel. Parallel is likely fine.
+      await Promise.all(entries.map(async (entry) => {
+        const { data, error } = await supabase
+          .from('patient_photos')
+          .insert({
+            patient_id: currentPatient.id,
+            title: entry.title,
+            description: entry.description,
+            before_url: entry.beforeUrl,
+            after_url: entry.afterUrl,
+            date: entry.date
+          })
+          .select()
+          .single();
 
-      if (data) {
-        // Generate signed URLs for immediate display
-        const getSigned = async (path: string) => {
-          if (!path) return '';
-          const { data: signedData } = await supabase.storage
-            .from('fotos-pacientes')
-            .createSignedUrl(path, 3600);
-          return signedData?.signedUrl || path;
-        };
+        if (error) throw error;
 
-        const newPhoto: PhotoEntry = {
-          id: data.id,
-          title: data.title,
-          date: data.date,
-          description: data.description,
-          beforeUrl: await getSigned(data.before_url),
-          afterUrl: await getSigned(data.after_url)
-        };
-        setGalleryItems([newPhoto, ...galleryItems]);
+        if (data) {
+          // Generate signed URLs immediately
+          const getSigned = async (path: string) => {
+            if (!path) return '';
+            const { data: signedData } = await supabase.storage
+              .from('fotos-pacientes')
+              .createSignedUrl(path, 3600);
+            return signedData?.signedUrl || path;
+          };
+
+          savedEntries.push({
+            id: data.id,
+            title: data.title,
+            date: data.date,
+            description: data.description,
+            beforeUrl: await getSigned(data.before_url),
+            afterUrl: await getSigned(data.after_url)
+          });
+        }
+      }));
+
+      if (savedEntries.length > 0) {
+        setGalleryItems(prev => [...savedEntries, ...prev]);
       }
+
     } catch (error) {
-      console.error('Error adding photo:', error);
-      alert('Erro ao adicionar foto.');
+      console.error('Error adding photos:', error);
+      alert('Erro ao adicionar foto(s).');
     }
   };
 
@@ -623,7 +623,8 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
         category: f.category,
         paymentMethod: f.payment_method,
         status: f.status,
-        patientName: f.patient_name
+        patientName: f.patient_name,
+        cost: Number(f.cost) || 0
       }));
 
       setFinancialRecords(mappedFinancial);
@@ -766,7 +767,8 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
     currentY = (doc as any).lastAutoTable.finalY + 15;
 
     // --- 4. Documentos Assinados ---
-    if (signedDocuments.length > 0) {
+    const signedDocs = patientDocuments.filter(d => d.status === 'signed');
+    if (signedDocs.length > 0) {
       if (currentY > 250) {
         doc.addPage();
         currentY = 20;
@@ -777,10 +779,10 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
       doc.text("Documentos Assinados", 14, currentY);
       currentY += 5;
 
-      const docsTableData = signedDocuments.map(docType => [
-        docType.charAt(0).toUpperCase() + docType.slice(1).replace('-', ' '),
+      const docsTableData = signedDocs.map(d => [
+        d.title || d.type.charAt(0).toUpperCase() + d.type.slice(1).replace('-', ' '),
         'Assinado',
-        formatDate(new Date()) // We don't have exact sign date in state list ideally we would fetch it but for now simple listing
+        d.signed_at ? formatDate(new Date(d.signed_at)) : formatDate(new Date())
       ]);
 
       autoTable(doc, {
@@ -809,19 +811,40 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
     try {
       if (!currentPatient?.id) return;
 
-      // 1. Log in patient_documents (keeps track of unique types signed)
-      const { error: docError } = await supabase
-        .from('patient_documents')
-        .insert({
-          patient_id: currentPatient.id,
-          document_type: docType
-        });
+      // 1. Check if document exists
+      const existingDoc = patientDocuments.find(d => d.type === docType);
+      let docResult;
 
-      if (docError) {
-        // Ignore duplicate key errors if we just want to track "ever signed" in this table, 
-        // essentially this table acts as a Set. But if we want a log of every print, we might just rely on clinical_history.
-        // For now, let's log the error but proceed to history logging.
-        console.log('Document logging:', docError);
+      if (existingDoc) {
+        // Update existing
+        const { data, error } = await supabase
+          .from('patient_documents')
+          .update({
+            status: 'signed',
+            signed_at: new Date().toISOString()
+          })
+          .eq('id', existingDoc.id)
+          .select()
+          .single();
+
+        if (error) throw error;
+        docResult = data;
+      } else {
+        // Insert new
+        const { data, error } = await supabase
+          .from('patient_documents')
+          .insert({
+            patient_id: currentPatient.id,
+            type: docType,
+            title: `Termo de ${docType.charAt(0).toUpperCase() + docType.slice(1)}`, // Simple title generation
+            status: 'signed',
+            signed_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        docResult = data;
       }
 
       // 2. Log in clinical_history (timeline)
@@ -844,8 +867,10 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
       if (historyError) throw historyError;
 
       // Update local state for badge
-      if (!signedDocuments.includes(docType)) {
-        setSignedDocuments([...signedDocuments, docType]);
+      if (existingDoc) {
+        setPatientDocuments(prev => prev.map(d => d.type === docType ? docResult : d));
+      } else {
+        setPatientDocuments(prev => [...prev, docResult]);
       }
 
       // Update local history timeline
@@ -853,6 +878,7 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
         id: historyEntry.id,
         title: historyEntry.title,
         date: formatDate(new Date(historyEntry.date), { day: '2-digit', month: 'short', year: 'numeric' }),
+        isoDate: historyEntry.date,
         doctor: historyEntry.doctor,
         patientSummary: historyEntry.patient_summary,
         clinicalNotes: historyEntry.clinical_notes,
@@ -991,7 +1017,7 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                   <p className="text-lg font-bold text-text-main">
                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
                       financialRecords
-                        .filter(r => r.status === 'Pago')
+                        .filter(r => r.status === 'Pago' || r.status === 'Recebido')
                         .reduce((acc, curr) => acc + curr.value, 0)
                     )}
                   </p>
@@ -1006,12 +1032,50 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                   <p className="text-lg font-bold text-text-main">
                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
                       financialRecords
-                        .filter(r => r.status === 'Pendente')
+                        .filter(r => r.status === 'Pendente' || r.status === 'Em aberto')
                         .reduce((acc, curr) => acc + curr.value, 0)
                     )}
                   </p>
                 </div>
               </div>
+
+              {/* Total Profit - All Records */}
+              <div className="flex items-center p-3 rounded-xl bg-teal-50/50 border border-teal-100">
+                <div className="h-10 w-10 rounded-full bg-teal-100 flex items-center justify-center text-teal-600 mr-3">
+                  <span className="material-symbols-outlined text-[20px]">trending_up</span>
+                </div>
+                <div>
+                  <p className="text-xs text-text-muted font-bold uppercase tracking-wide">Total Lucro</p>
+                  <p className="text-lg font-bold text-text-main">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                      financialRecords.reduce((acc, curr) => {
+                        const revenue = curr.type === 'income' ? curr.value : 0;
+                        const itemCost = curr.type === 'income' ? (curr.cost || 0) : curr.value;
+                        return acc + (revenue - itemCost);
+                      }, 0)
+                    )}
+                  </p>
+                </div>
+              </div>
+
+              {/* Total Cost - All Records */}
+              <div className="flex items-center p-3 rounded-xl bg-red-50/50 border border-red-100">
+                <div className="h-10 w-10 rounded-full bg-red-100 flex items-center justify-center text-red-600 mr-3">
+                  <span className="material-symbols-outlined text-[20px]">trending_down</span>
+                </div>
+                <div>
+                  <p className="text-xs text-text-muted font-bold uppercase tracking-wide">Total Custo</p>
+                  <p className="text-lg font-bold text-text-main">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
+                      financialRecords.reduce((acc, curr) => {
+                        const itemCost = curr.type === 'income' ? (curr.cost || 0) : curr.value;
+                        return acc + itemCost;
+                      }, 0)
+                    )}
+                  </p>
+                </div>
+              </div>
+
               <div className="flex items-center p-3 rounded-xl bg-blue-50/50 border border-blue-100">
                 <div className="h-10 w-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 mr-3">
                   <span className="material-symbols-outlined text-[20px]">event_repeat</span>
@@ -1320,6 +1384,101 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
     </div>
   );
 
+  const handleRequestSignature = async (type: string, title: string) => {
+    try {
+      if (!patientId) {
+        alert('Erro: ID do paciente inválido.');
+        return;
+      }
+
+      // Verify if already exists in DB (avoid race conditions with stale state)
+      const { data: existing } = await supabase
+        .from('patient_documents')
+        .select('id')
+        .eq('patient_id', patientId)
+        .eq('type', type)
+        .maybeSingle();
+
+      if (existing) {
+        alert('Já existe um documento ou solicitação deste tipo.');
+        // Refresh to sync state
+        const { data: docs } = await supabase
+          .from('patient_documents')
+          .select('*')
+          .eq('patient_id', patientId);
+        setPatientDocuments(docs || []);
+        return;
+      }
+
+      const { error } = await supabase.from('patient_documents').insert({
+        patient_id: patientId,
+        type,
+        title,
+        status: 'pending'
+      });
+
+      if (error) throw error;
+      alert('Solicitação de assinatura enviada com sucesso!');
+
+      // Refresh documents
+      const { data: docs } = await supabase
+        .from('patient_documents')
+        .select('*')
+        .eq('patient_id', patientId);
+      setPatientDocuments(docs || []);
+
+    } catch (error: any) {
+      console.error('Error requesting signature:', error);
+      alert('Erro ao solicitar assinatura. Tente novamente.');
+    } finally {
+      setSendingRequest(null);
+    }
+  };
+
+  const handleReissueDocument = async (type: string, title: string) => {
+    if (!currentPatient?.id) return;
+
+    // Create new pending document regardless of existing ones
+    // This maintains history and resets the flow for the admin
+    try {
+      const { error } = await supabase.from('patient_documents').insert({
+        patient_id: currentPatient.id,
+        type,
+        title,
+        status: 'pending' // Start as pending
+      });
+
+      if (error) throw error;
+      alert('Novo documento gerado para assinatura!');
+
+      // Refresh documents
+      const { data: docs } = await supabase
+        .from('patient_documents')
+        .select('*')
+        .eq('patient_id', currentPatient.id)
+        .order('created_at', { ascending: false });
+      setPatientDocuments(docs || []);
+
+    } catch (error) {
+      console.error('Error reissuing document:', error);
+      alert('Erro ao gerar novo documento.');
+    }
+  };
+
+  const handleViewSignedDocument = async (doc: any) => {
+    if (!doc) return;
+
+    let sigUrl = null;
+    if (doc.signature_url) {
+      sigUrl = await getSignedUrlHelper(doc.signature_url);
+    }
+
+    setViewingSignedDoc(doc);
+    setCurrentSignatureUrl(sigUrl);
+    setSelectedDocument(doc.type);
+    setShowDocumentModal(true);
+  };
+
   const renderPhotos = () => (
     <div className="space-y-6 animate-fade-in">
       <div className="flex justify-between items-center mb-2">
@@ -1420,6 +1579,8 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
               <th className="py-4 px-6 text-xs font-bold text-text-muted uppercase">Forma Pagto</th>
               <th className="py-4 px-6 text-xs font-bold text-text-muted uppercase">Status</th>
               <th className="py-4 px-6 text-xs font-bold text-text-muted uppercase text-right">Valor</th>
+              <th className="py-4 px-6 text-xs font-bold text-text-muted uppercase text-right">Custo</th>
+              <th className="py-4 px-6 text-xs font-bold text-text-muted uppercase text-right">Lucro</th>
               <th className="py-4 px-6"></th>
             </tr>
           </thead>
@@ -1446,6 +1607,23 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                 </td>
                 <td className="py-4 px-6 text-sm font-bold text-text-main text-right">
                   {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(record.value)}
+                </td>
+                <td className="py-4 px-6 text-sm text-text-muted text-right">
+                  {record.type === 'income' ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(record.cost || 0) : '-'}
+                </td>
+                <td className="py-4 px-6 text-sm font-bold text-right">
+                  {record.type === 'income' ? (
+                    <div className="flex flex-col items-end">
+                      <span className={(record.value - (record.cost || 0)) >= 0 ? "text-green-600" : "text-red-600"}>
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(record.value - (record.cost || 0))}
+                      </span>
+                      {record.value > 0 && (
+                        <span className="text-xs text-text-muted">
+                          {(((record.value - (record.cost || 0)) / record.value) * 100).toFixed(1)}%
+                        </span>
+                      )}
+                    </div>
+                  ) : '-'}
                 </td>
                 <td className="py-4 px-6 text-right">
                   {userRole === 'admin' && (
@@ -1474,278 +1652,607 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
     </div>
   );
 
-  const renderDocuments = () => (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex justify-between items-center mb-2">
-        <div>
-          <h3 className="font-bold text-lg text-text-main">Documentos e Termos</h3>
-          <p className="text-text-muted text-sm">Termos de consentimento e fichas para impressão</p>
+  const renderDocuments = () => {
+    const getDocStatus = (type: string) => {
+      return patientDocuments.find(d => d.type === type);
+    };
+
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <div className="flex justify-between items-center mb-2">
+          <div>
+            <h3 className="font-bold text-lg text-text-main">Documentos e Termos</h3>
+            <p className="text-text-muted text-sm">Termos de consentimento e fichas para impressão</p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Botox */}
+          <div className="bg-white p-6 rounded-xl border border-[#f3f2f1] shadow-sm hover:shadow-md transition-all group">
+            <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center text-primary mb-4 group-hover:scale-110 transition-transform">
+              <span className="material-symbols-outlined text-2xl">description</span>
+            </div>
+            <h4 className="font-bold text-text-main text-lg mb-2">Termo Botox</h4>
+            <p className="text-text-muted text-sm mb-6">Termo de esclarecimento e consentimento para aplicação de Toxina Botulínica.</p>
+            <div className="flex flex-col gap-3">
+              {getDocStatus('botox')?.status === 'signed' && (
+                <button
+                  onClick={() => handleViewSignedDocument(getDocStatus('botox'))}
+                  className="w-full py-2 bg-green-50 text-green-700 font-bold rounded-lg hover:bg-green-100 transition-colors border border-green-200 flex items-center justify-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-sm">visibility</span>
+                  Já Assinado
+                </button>
+              )}
+              {getDocStatus('botox')?.status === 'pending' && (
+                <div className="w-full py-1.5 bg-yellow-50 text-yellow-700 font-bold rounded-lg border border-yellow-200 flex items-center justify-center gap-2 text-xs">
+                  <span className="material-symbols-outlined text-sm">hourglass_empty</span>
+                  Assinatura Pendente
+                </div>
+              )}
+              <button
+                onClick={() => {
+                  const doc = getDocStatus('botox');
+                  if (doc?.status === 'signed') {
+                    if (confirm('Deseja gerar uma nova via deste documento para assinatura?')) {
+                      handleReissueDocument('botox', 'Termo de Consentimento - Botox');
+                    }
+                  } else {
+                    if (!doc) {
+                      handleRequestSignature('botox', 'Termo de Consentimento - Botox');
+                    }
+                    setSelectedDocument('botox');
+                    setShowDocumentModal(true);
+                    setViewingSignedDoc(null);
+                    setCurrentSignatureUrl(null);
+                  }
+                }}
+                className="w-full py-2 bg-background-light text-text-main font-bold rounded-lg hover:bg-primary hover:text-white transition-colors border border-gray-200 hover:border-primary flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-sm">print</span>
+                {getDocStatus('botox')?.status === 'signed' ? 'Imprimir Novamente' : 'Preencher & Imprimir'}
+              </button>
+              <button
+                onClick={() => handleRequestSignature('botox', 'Termo de Consentimento - Botox')}
+                disabled={!!getDocStatus('botox')}
+                className={`w-full py-2 font-bold rounded-lg transition-colors border flex items-center justify-center gap-2 ${getDocStatus('botox')
+                  ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                  : 'bg-background-light text-primary hover:bg-primary/10 border-primary/20'
+                  }`}
+              >
+                <span className="material-symbols-outlined text-sm">draw</span>
+                {getDocStatus('botox') ? 'Solicitação Enviada' : 'Solicitar Assinatura App'}
+              </button>
+            </div>
+          </div>
+
+          {/* Bioestimulador */}
+          <div className="bg-white p-6 rounded-xl border border-[#f3f2f1] shadow-sm hover:shadow-md transition-all group">
+            <div className="h-12 w-12 rounded-lg bg-pink-100 flex items-center justify-center text-pink-600 mb-4 group-hover:scale-110 transition-transform">
+              <span className="material-symbols-outlined text-2xl">spa</span>
+            </div>
+            <h4 className="font-bold text-text-main text-lg mb-2">Termo Bioestimulador</h4>
+            <p className="text-text-muted text-sm mb-6">Termo de consentimento para bioestimulador de colágeno.</p>
+            <div className="flex flex-col gap-3">
+              {getDocStatus('bioestimulador')?.status === 'signed' && (
+                <button
+                  onClick={() => handleViewSignedDocument(getDocStatus('bioestimulador'))}
+                  className="w-full py-2 bg-green-50 text-green-700 font-bold rounded-lg hover:bg-green-100 transition-colors border border-green-200 flex items-center justify-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-sm">visibility</span>
+                  Já Assinado
+                </button>
+              )}
+              {getDocStatus('bioestimulador')?.status === 'pending' && (
+                <div className="w-full py-1.5 bg-yellow-50 text-yellow-700 font-bold rounded-lg border border-yellow-200 flex items-center justify-center gap-2 text-xs">
+                  <span className="material-symbols-outlined text-sm">hourglass_empty</span>
+                  Assinatura Pendente
+                </div>
+              )}
+              <button
+                onClick={() => {
+                  const doc = getDocStatus('bioestimulador');
+                  if (doc?.status === 'signed') {
+                    if (confirm('Deseja gerar uma nova via deste documento para assinatura?')) {
+                      handleReissueDocument('bioestimulador', 'Termo de Consentimento - Bioestimulador');
+                    }
+                  } else {
+                    if (!doc) {
+                      handleRequestSignature('bioestimulador', 'Termo de Consentimento - Bioestimulador');
+                    }
+                    setSelectedDocument('bioestimulador');
+                    setShowDocumentModal(true);
+                    setViewingSignedDoc(null);
+                    setCurrentSignatureUrl(null);
+                  }
+                }}
+                className="w-full py-2 bg-background-light text-text-main font-bold rounded-lg hover:bg-pink-500 hover:text-white transition-colors border border-gray-200 hover:border-pink-500 flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-sm">print</span>
+                {getDocStatus('bioestimulador')?.status === 'signed' ? 'Imprimir Novamente' : 'Preencher & Imprimir'}
+              </button>
+              <button
+                onClick={() => handleRequestSignature('bioestimulador', 'Termo de Consentimento - Bioestimulador')}
+                disabled={!!getDocStatus('bioestimulador')}
+                className={`w-full py-2 font-bold rounded-lg transition-colors border flex items-center justify-center gap-2 ${getDocStatus('bioestimulador')
+                  ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                  : 'bg-background-light text-pink-600 hover:bg-pink-50 border-pink-200'
+                  }`}
+              >
+                <span className="material-symbols-outlined text-sm">draw</span>
+                {getDocStatus('bioestimulador') ? 'Solicitação Enviada' : 'Solicitar Assinatura App'}
+              </button>
+            </div>
+          </div>
+
+          {/* Fio PDO */}
+          <div className="bg-white p-6 rounded-xl border border-[#f3f2f1] shadow-sm hover:shadow-md transition-all group">
+            <div className="h-12 w-12 rounded-lg bg-orange-100 flex items-center justify-center text-orange-600 mb-4 group-hover:scale-110 transition-transform">
+              <span className="material-symbols-outlined text-2xl">texture</span>
+            </div>
+            <h4 className="font-bold text-text-main text-lg mb-2">Termo Fio PDO</h4>
+            <p className="text-text-muted text-sm mb-6">Termo de consentimento para implante de fios de PDO.</p>
+            <div className="flex flex-col gap-3">
+              {getDocStatus('fio-pdo')?.status === 'signed' && (
+                <button
+                  onClick={() => handleViewSignedDocument(getDocStatus('fio-pdo'))}
+                  className="w-full py-2 bg-green-50 text-green-700 font-bold rounded-lg hover:bg-green-100 transition-colors border border-green-200 flex items-center justify-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-sm">visibility</span>
+                  Já Assinado
+                </button>
+              )}
+              {getDocStatus('fio-pdo')?.status === 'pending' && (
+                <div className="w-full py-1.5 bg-yellow-50 text-yellow-700 font-bold rounded-lg border border-yellow-200 flex items-center justify-center gap-2 text-xs">
+                  <span className="material-symbols-outlined text-sm">hourglass_empty</span>
+                  Assinatura Pendente
+                </div>
+              )}
+              <button
+                onClick={() => {
+                  const doc = getDocStatus('fio-pdo');
+                  if (doc?.status === 'signed') {
+                    if (confirm('Deseja gerar uma nova via deste documento para assinatura?')) {
+                      handleReissueDocument('fio-pdo', 'Termo de Consentimento - Fios PDO');
+                    }
+                  } else {
+                    if (!doc) {
+                      handleRequestSignature('fio-pdo', 'Termo de Consentimento - Fios PDO');
+                    }
+                    setSelectedDocument('fio-pdo');
+                    setShowDocumentModal(true);
+                    setViewingSignedDoc(null);
+                    setCurrentSignatureUrl(null);
+                  }
+                }}
+                className="w-full py-2 bg-background-light text-text-main font-bold rounded-lg hover:bg-orange-500 hover:text-white transition-colors border border-gray-200 hover:border-orange-500 flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-sm">print</span>
+                {getDocStatus('fio-pdo')?.status === 'signed' ? 'Imprimir Novamente' : 'Preencher & Imprimir'}
+              </button>
+              <button
+                onClick={() => handleRequestSignature('fio-pdo', 'Termo de Consentimento - Fios PDO')}
+                disabled={!!getDocStatus('fio-pdo')}
+                className={`w-full py-2 font-bold rounded-lg transition-colors border flex items-center justify-center gap-2 ${getDocStatus('fio-pdo')
+                  ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                  : 'bg-background-light text-orange-600 hover:bg-orange-50 border-orange-200'
+                  }`}
+              >
+                <span className="material-symbols-outlined text-sm">draw</span>
+                {getDocStatus('fio-pdo') ? 'Solicitação Enviada' : 'Solicitar Assinatura App'}
+              </button>
+            </div>
+          </div>
+
+          {/* Carta Hialuronidase */}
+          <div className="bg-white p-6 rounded-xl border border-[#f3f2f1] shadow-sm hover:shadow-md transition-all group">
+            <div className="h-12 w-12 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 mb-4 group-hover:scale-110 transition-transform">
+              <span className="material-symbols-outlined text-2xl">medical_services</span>
+            </div>
+            <h4 className="font-bold text-text-main text-lg mb-2">Carta Hialuronidase</h4>
+            <p className="text-text-muted text-sm mb-6">Carta de informação ao paciente sobre Hialuronidase.</p>
+            <div className="flex flex-col gap-3">
+              {getDocStatus('hialuronidase')?.status === 'signed' && (
+                <button
+                  onClick={() => handleViewSignedDocument(getDocStatus('hialuronidase'))}
+                  className="w-full py-2 bg-green-50 text-green-700 font-bold rounded-lg hover:bg-green-100 transition-colors border border-green-200 flex items-center justify-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-sm">visibility</span>
+                  Já Assinado
+                </button>
+              )}
+              {getDocStatus('hialuronidase')?.status === 'pending' && (
+                <div className="w-full py-1.5 bg-yellow-50 text-yellow-700 font-bold rounded-lg border border-yellow-200 flex items-center justify-center gap-2 text-xs">
+                  <span className="material-symbols-outlined text-sm">hourglass_empty</span>
+                  Assinatura Pendente
+                </div>
+              )}
+              <button
+                onClick={() => {
+                  const doc = getDocStatus('hialuronidase');
+                  if (doc?.status === 'signed') {
+                    if (confirm('Deseja gerar uma nova via deste documento para assinatura?')) {
+                      handleReissueDocument('hialuronidase', 'Carta de Informação - Hialuronidase');
+                    }
+                  } else {
+                    if (!doc) {
+                      handleRequestSignature('hialuronidase', 'Carta de Informação - Hialuronidase');
+                    }
+                    setSelectedDocument('hialuronidase');
+                    setShowDocumentModal(true);
+                    setViewingSignedDoc(null);
+                    setCurrentSignatureUrl(null);
+                  }
+                }}
+                className="w-full py-2 bg-background-light text-text-main font-bold rounded-lg hover:bg-blue-500 hover:text-white transition-colors border border-gray-200 hover:border-blue-500 flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-sm">print</span>
+                {getDocStatus('hialuronidase')?.status === 'signed' ? 'Imprimir Novamente' : 'Preencher & Imprimir'}
+              </button>
+              {/* Note: I removed the extra button here because Hialuronidase card in view_file only had one button block or I truncated it.
+                 Wait, view_file showed two buttons. Let me restore it.
+              */}
+            </div>
+          </div>
+
+          {/* Teal placeholder div - kept to match original structure although no buttons visible in snippet */}
+          <div className="bg-white p-6 rounded-xl border border-[#f3f2f1] shadow-sm hover:shadow-md transition-all group">
+            <div className="h-12 w-12 rounded-lg bg-teal-100 flex items-center justify-center text-teal-600 mb-4 group-hover:scale-110 transition-transform">
+              <span className="material-symbols-outlined text-2xl">water_drop</span>
+            </div>
+            {/* Add content if known, otherwise leave as placeholder or omit */}
+            <h4 className="font-bold text-text-main text-lg mb-2">Termo Hidrolipo</h4>
+            <p className="text-text-muted text-sm mb-6">Termo de consentimento para Hidrolipoclasia.</p>
+            <div className="flex flex-col gap-3">
+              {getDocStatus('hidrolipo')?.status === 'signed' && (
+                <button
+                  onClick={() => handleViewSignedDocument(getDocStatus('hidrolipo'))}
+                  className="w-full py-2 bg-green-50 text-green-700 font-bold rounded-lg hover:bg-green-100 transition-colors border border-green-200 flex items-center justify-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-sm">visibility</span>
+                  Já Assinado
+                </button>
+              )}
+              {getDocStatus('hidrolipo')?.status === 'pending' && (
+                <div className="w-full py-1.5 bg-yellow-50 text-yellow-700 font-bold rounded-lg border border-yellow-200 flex items-center justify-center gap-2 text-xs">
+                  <span className="material-symbols-outlined text-sm">hourglass_empty</span>
+                  Assinatura Pendente
+                </div>
+              )}
+              <button
+                onClick={() => {
+                  const doc = getDocStatus('hidrolipo');
+                  if (doc?.status === 'signed') {
+                    if (confirm('Deseja gerar uma nova via deste documento para assinatura?')) {
+                      handleReissueDocument('hidrolipo', 'Termo de Consentimento - Hidrolipo');
+                    }
+                  } else {
+                    if (!doc) {
+                      handleRequestSignature('hidrolipo', 'Termo de Consentimento - Hidrolipo');
+                    }
+                    setSelectedDocument('hidrolipo');
+                    setShowDocumentModal(true);
+                    setViewingSignedDoc(null);
+                    setCurrentSignatureUrl(null);
+                  }
+                }}
+                className="w-full py-2 bg-background-light text-text-main font-bold rounded-lg hover:bg-teal-500 hover:text-white transition-colors border border-gray-200 hover:border-teal-500 flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-sm">print</span>
+                {getDocStatus('hidrolipo')?.status === 'signed' ? 'Imprimir Novamente' : 'Preencher & Imprimir'}
+              </button>
+              <button
+                onClick={() => handleRequestSignature('hidrolipo', 'Termo de Consentimento - Hidrolipo')}
+                disabled={!!getDocStatus('hidrolipo')}
+                className={`w-full py-2 font-bold rounded-lg transition-colors border flex items-center justify-center gap-2 ${getDocStatus('hidrolipo')
+                  ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                  : 'bg-background-light text-teal-600 hover:bg-teal-50 border-teal-200'
+                  }`}
+              >
+                <span className="material-symbols-outlined text-sm">draw</span>
+                {getDocStatus('hidrolipo') ? 'Solicitação Enviada' : 'Solicitar Assinatura App'}
+              </button>
+            </div>
+          </div>
+
+          {/* Intradermo */}
+          <div className="bg-white p-6 rounded-xl border border-[#f3f2f1] shadow-sm hover:shadow-md transition-all group">
+            <div className="h-12 w-12 rounded-lg bg-pink-100 flex items-center justify-center text-pink-600 mb-4 group-hover:scale-110 transition-transform">
+              <span className="material-symbols-outlined text-2xl">vaccines</span>
+            </div>
+            <h4 className="font-bold text-text-main text-lg mb-2">Termo Intradermo</h4>
+            <p className="text-text-muted text-sm mb-6">Consentimento para Intradermoterapia.</p>
+            <div className="flex flex-col gap-3">
+              {getDocStatus('intradermo')?.status === 'signed' && (
+                <button
+                  onClick={() => handleViewSignedDocument(getDocStatus('intradermo'))}
+                  className="w-full py-2 bg-green-50 text-green-700 font-bold rounded-lg hover:bg-green-100 transition-colors border border-green-200 flex items-center justify-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-sm">visibility</span>
+                  Já Assinado
+                </button>
+              )}
+              {getDocStatus('intradermo')?.status === 'pending' && (
+                <div className="w-full py-1.5 bg-yellow-50 text-yellow-700 font-bold rounded-lg border border-yellow-200 flex items-center justify-center gap-2 text-xs">
+                  <span className="material-symbols-outlined text-sm">hourglass_empty</span>
+                  Assinatura Pendente
+                </div>
+              )}
+              <button
+                onClick={() => {
+                  const doc = getDocStatus('intradermo');
+                  if (doc?.status === 'signed') {
+                    if (confirm('Deseja gerar uma nova via deste documento para assinatura?')) {
+                      handleReissueDocument('intradermo', 'Termo de Consentimento - Intradermoterapia');
+                    }
+                  } else {
+                    if (!doc) {
+                      handleRequestSignature('intradermo', 'Termo de Consentimento - Intradermoterapia');
+                    }
+                    setSelectedDocument('intradermo');
+                    setShowDocumentModal(true);
+                    setViewingSignedDoc(null);
+                    setCurrentSignatureUrl(null);
+                  }
+                }}
+                className="w-full py-2 bg-background-light text-text-main font-bold rounded-lg hover:bg-pink-500 hover:text-white transition-colors border border-gray-200 hover:border-pink-500 flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-sm">print</span>
+                {getDocStatus('intradermo')?.status === 'signed' ? 'Imprimir Novamente' : 'Preencher & Imprimir'}
+              </button>
+              <button
+                onClick={() => handleRequestSignature('intradermo', 'Termo de Consentimento - Intradermoterapia')}
+                disabled={!!getDocStatus('intradermo')}
+                className={`w-full py-2 font-bold rounded-lg transition-colors border flex items-center justify-center gap-2 ${getDocStatus('intradermo')
+                  ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                  : 'bg-background-light text-pink-600 hover:bg-pink-50 border-pink-200'
+                  }`}
+              >
+                <span className="material-symbols-outlined text-sm">draw</span>
+                {getDocStatus('intradermo') ? 'Solicitação Enviada' : 'Solicitar Assinatura App'}
+              </button>
+            </div>
+          </div>
+
+          {/* Lifting */}
+          <div className="bg-white p-6 rounded-xl border border-[#f3f2f1] shadow-sm hover:shadow-md transition-all group">
+            <div className="h-12 w-12 rounded-lg bg-purple-100 flex items-center justify-center text-purple-600 mb-4 group-hover:scale-110 transition-transform">
+              <span className="material-symbols-outlined text-2xl">face_retouching_natural</span>
+            </div>
+            <h4 className="font-bold text-text-main text-lg mb-2">Termo Lifting</h4>
+            <p className="text-text-muted text-sm mb-6">Consentimento para Lifting Temporal.</p>
+            <div className="flex flex-col gap-3">
+              {getDocStatus('lifting')?.status === 'signed' && (
+                <button
+                  onClick={() => handleViewSignedDocument(getDocStatus('lifting'))}
+                  className="w-full py-2 bg-green-50 text-green-700 font-bold rounded-lg hover:bg-green-100 transition-colors border border-green-200 flex items-center justify-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-sm">visibility</span>
+                  Já Assinado
+                </button>
+              )}
+              {getDocStatus('lifting')?.status === 'pending' && (
+                <div className="w-full py-1.5 bg-yellow-50 text-yellow-700 font-bold rounded-lg border border-yellow-200 flex items-center justify-center gap-2 text-xs">
+                  <span className="material-symbols-outlined text-sm">hourglass_empty</span>
+                  Assinatura Pendente
+                </div>
+              )}
+              <button
+                onClick={() => {
+                  const doc = getDocStatus('lifting');
+                  if (doc?.status === 'signed') {
+                    if (confirm('Deseja gerar uma nova via deste documento para assinatura?')) {
+                      handleReissueDocument('lifting', 'Termo de Consentimento - Lifting Temporal');
+                    }
+                  } else {
+                    if (!doc) {
+                      handleRequestSignature('lifting', 'Termo de Consentimento - Lifting Temporal');
+                    }
+                    setSelectedDocument('lifting');
+                    setShowDocumentModal(true);
+                    setViewingSignedDoc(null);
+                    setCurrentSignatureUrl(null);
+                  }
+                }}
+                className="w-full py-2 bg-background-light text-text-main font-bold rounded-lg hover:bg-purple-500 hover:text-white transition-colors border border-gray-200 hover:border-purple-500 flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-sm">print</span>
+                {getDocStatus('lifting')?.status === 'signed' ? 'Imprimir Novamente' : 'Preencher & Imprimir'}
+              </button>
+              <button
+                onClick={() => handleRequestSignature('lifting', 'Termo de Consentimento - Lifting Temporal')}
+                disabled={!!getDocStatus('lifting')}
+                className={`w-full py-2 font-bold rounded-lg transition-colors border flex items-center justify-center gap-2 ${getDocStatus('lifting')
+                  ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                  : 'bg-background-light text-purple-600 hover:bg-purple-50 border-purple-200'
+                  }`}
+              >
+                <span className="material-symbols-outlined text-sm">draw</span>
+                {getDocStatus('lifting') ? 'Solicitação Enviada' : 'Solicitar Assinatura App'}
+              </button>
+            </div>
+          </div>
+
+          {/* Microagulhamento */}
+          <div className="bg-white p-6 rounded-xl border border-[#f3f2f1] shadow-sm hover:shadow-md transition-all group">
+            <div className="h-12 w-12 rounded-lg bg-orange-100 flex items-center justify-center text-orange-600 mb-4 group-hover:scale-110 transition-transform">
+              <span className="material-symbols-outlined text-2xl">grid_on</span>
+            </div>
+            <h4 className="font-bold text-text-main text-lg mb-2">Termo Microagulhamento</h4>
+            <p className="text-text-muted text-sm mb-6">Consentimento para Microagulhamento.</p>
+            <div className="flex flex-col gap-3">
+              {getDocStatus('microagulhamento')?.status === 'signed' && (
+                <button
+                  onClick={() => handleViewSignedDocument(getDocStatus('microagulhamento'))}
+                  className="w-full py-2 bg-green-50 text-green-700 font-bold rounded-lg hover:bg-green-100 transition-colors border border-green-200 flex items-center justify-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-sm">visibility</span>
+                  Já Assinado
+                </button>
+              )}
+              {getDocStatus('microagulhamento')?.status === 'pending' && (
+                <div className="w-full py-1.5 bg-yellow-50 text-yellow-700 font-bold rounded-lg border border-yellow-200 flex items-center justify-center gap-2 text-xs">
+                  <span className="material-symbols-outlined text-sm">hourglass_empty</span>
+                  Assinatura Pendente
+                </div>
+              )}
+              <button
+                onClick={() => {
+                  const doc = getDocStatus('microagulhamento');
+                  if (doc?.status === 'signed') {
+                    if (confirm('Deseja gerar uma nova via deste documento para assinatura?')) {
+                      handleReissueDocument('microagulhamento', 'Termo de Consentimento - Microagulhamento');
+                    }
+                  } else {
+                    if (!doc) {
+                      handleRequestSignature('microagulhamento', 'Termo de Consentimento - Microagulhamento');
+                    }
+                    setSelectedDocument('microagulhamento');
+                    setShowDocumentModal(true);
+                    setViewingSignedDoc(null);
+                    setCurrentSignatureUrl(null);
+                  }
+                }}
+                className="w-full py-2 bg-background-light text-text-main font-bold rounded-lg hover:bg-orange-500 hover:text-white transition-colors border border-gray-200 hover:border-orange-500 flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-sm">print</span>
+                {getDocStatus('microagulhamento')?.status === 'signed' ? 'Imprimir Novamente' : 'Preencher & Imprimir'}
+              </button>
+              <button
+                onClick={() => handleRequestSignature('microagulhamento', 'Termo de Consentimento - Microagulhamento')}
+                disabled={!!getDocStatus('microagulhamento')}
+                className={`w-full py-2 font-bold rounded-lg transition-colors border flex items-center justify-center gap-2 ${getDocStatus('microagulhamento')
+                  ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                  : 'bg-background-light text-orange-600 hover:bg-orange-50 border-orange-200'
+                  }`}
+              >
+                <span className="material-symbols-outlined text-sm">draw</span>
+                {getDocStatus('microagulhamento') ? 'Solicitação Enviada' : 'Solicitar Assinatura App'}
+              </button>
+            </div>
+          </div>
+
+          {/* Peeling */}
+          <div className="bg-white p-6 rounded-xl border border-[#f3f2f1] shadow-sm hover:shadow-md transition-all group">
+            <div className="h-12 w-12 rounded-lg bg-teal-100 flex items-center justify-center text-teal-600 mb-4 group-hover:scale-110 transition-transform">
+              <span className="material-symbols-outlined text-2xl">healing</span>
+            </div>
+            <h4 className="font-bold text-text-main text-lg mb-2">Termo Peeling</h4>
+            <p className="text-text-muted text-sm mb-6">Consentimento para Tratamento com Peeling.</p>
+            <div className="flex flex-col gap-3">
+              {getDocStatus('peeling')?.status === 'signed' && (
+                <button
+                  onClick={() => handleViewSignedDocument(getDocStatus('peeling'))}
+                  className="w-full py-2 bg-green-50 text-green-700 font-bold rounded-lg hover:bg-green-100 transition-colors border border-green-200 flex items-center justify-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-sm">visibility</span>
+                  Já Assinado
+                </button>
+              )}
+              {getDocStatus('peeling')?.status === 'pending' && (
+                <div className="w-full py-1.5 bg-yellow-50 text-yellow-700 font-bold rounded-lg border border-yellow-200 flex items-center justify-center gap-2 text-xs">
+                  <span className="material-symbols-outlined text-sm">hourglass_empty</span>
+                  Assinatura Pendente
+                </div>
+              )}
+              <button
+                onClick={() => {
+                  const doc = getDocStatus('peeling');
+                  if (doc?.status === 'signed') {
+                    if (confirm('Deseja gerar uma nova via deste documento para assinatura?')) {
+                      handleReissueDocument('peeling', 'TERMO DE CONSENTIMENTO - PEELING');
+                    }
+                  } else {
+                    if (!doc) {
+                      handleRequestSignature('peeling', 'TERMO DE CONSENTIMENTO - PEELING');
+                    }
+                    setSelectedDocument('peeling');
+                    setShowDocumentModal(true);
+                    setViewingSignedDoc(null);
+                    setCurrentSignatureUrl(null);
+                  }
+                }}
+                className="w-full py-2 bg-background-light text-text-main font-bold rounded-lg hover:bg-teal-500 hover:text-white transition-colors border border-gray-200 hover:border-teal-500 flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-sm">print</span>
+                {getDocStatus('peeling')?.status === 'signed' ? 'Imprimir Novamente' : 'Preencher & Imprimir'}
+              </button>
+              <button
+                onClick={() => handleRequestSignature('peeling', 'TERMO DE CONSENTIMENTO - PEELING')}
+                disabled={!!getDocStatus('peeling')}
+                className={`w-full py-2 font-bold rounded-lg transition-colors border flex items-center justify-center gap-2 ${getDocStatus('peeling')
+                  ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                  : 'bg-background-light text-teal-600 hover:bg-teal-50 border-teal-200'
+                  }`}
+              >
+                <span className="material-symbols-outlined text-sm">draw</span>
+                {getDocStatus('peeling') ? 'Solicitação Enviada' : 'Solicitar Assinatura App'}
+              </button>
+            </div>
+          </div>
+
+          {/* Preenchimento */}
+          <div className="bg-white p-6 rounded-xl border border-[#f3f2f1] shadow-sm hover:shadow-md transition-all group">
+            <div className="h-12 w-12 rounded-lg bg-pink-100 flex items-center justify-center text-pink-600 mb-4 group-hover:scale-110 transition-transform">
+              <span className="material-symbols-outlined text-2xl">vaccines</span>
+            </div>
+            <h4 className="font-bold text-text-main text-lg mb-2">Termo Preenchimento</h4>
+            <p className="text-text-muted text-sm mb-6">Consentimento para Preenchimento Facial.</p>
+            <div className="flex flex-col gap-3">
+              {getDocStatus('preenchimento')?.status === 'signed' && (
+                <button
+                  onClick={() => handleViewSignedDocument(getDocStatus('preenchimento'))}
+                  className="w-full py-2 bg-green-50 text-green-700 font-bold rounded-lg hover:bg-green-100 transition-colors border border-green-200 flex items-center justify-center gap-2"
+                >
+                  <span className="material-symbols-outlined text-sm">visibility</span>
+                  Já Assinado
+                </button>
+              )}
+              {getDocStatus('preenchimento')?.status === 'pending' && (
+                <div className="w-full py-1.5 bg-yellow-50 text-yellow-700 font-bold rounded-lg border border-yellow-200 flex items-center justify-center gap-2 text-xs">
+                  <span className="material-symbols-outlined text-sm">hourglass_empty</span>
+                  Assinatura Pendente
+                </div>
+              )}
+              <button
+                onClick={() => {
+                  const doc = getDocStatus('preenchimento');
+                  if (doc?.status === 'signed') {
+                    if (confirm('Deseja gerar uma nova via deste documento para assinatura?')) {
+                      handleReissueDocument('preenchimento', 'Termo de Consentimento - Preenchimento Facial');
+                    }
+                  } else {
+                    if (!doc) {
+                      handleRequestSignature('preenchimento', 'Termo de Consentimento - Preenchimento Facial');
+                    }
+                    setSelectedDocument('preenchimento');
+                    setShowDocumentModal(true);
+                    setViewingSignedDoc(null);
+                    setCurrentSignatureUrl(null);
+                  }
+                }}
+                className="w-full py-2 bg-background-light text-text-main font-bold rounded-lg hover:bg-pink-500 hover:text-white transition-colors border border-gray-200 hover:border-pink-500 flex items-center justify-center gap-2"
+              >
+                <span className="material-symbols-outlined text-sm">print</span>
+                {getDocStatus('preenchimento')?.status === 'signed' ? 'Imprimir Novamente' : 'Preencher & Imprimir'}
+              </button>
+              <button
+                onClick={() => handleRequestSignature('preenchimento', 'Termo de Consentimento - Preenchimento Facial')}
+                disabled={!!getDocStatus('preenchimento')}
+                className={`w-full py-2 font-bold rounded-lg transition-colors border flex items-center justify-center gap-2 ${getDocStatus('preenchimento')
+                  ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                  : 'bg-background-light text-pink-600 hover:bg-pink-50 border-pink-200'
+                  }`}
+              >
+                <span className="material-symbols-outlined text-sm">draw</span>
+                {getDocStatus('preenchimento') ? 'Solicitação Enviada' : 'Solicitar Assinatura App'}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-xl border border-[#f3f2f1] shadow-sm hover:shadow-md transition-all group">
-          <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center text-primary mb-4 group-hover:scale-110 transition-transform">
-            <span className="material-symbols-outlined text-2xl">description</span>
-          </div>
-          <h4 className="font-bold text-text-main text-lg mb-2">Termo Botox</h4>
-          <p className="text-text-muted text-sm mb-6">Termo de esclarecimento e consentimento para aplicação de Toxina Botulínica.</p>
-          <div className="flex flex-col gap-3">
-            {signedDocuments.includes('botox') && (
-              <div className="w-full py-1.5 bg-green-50 text-green-700 font-bold rounded-lg border border-green-200 flex items-center justify-center gap-2 text-xs">
-                <span className="material-symbols-outlined text-sm">check_circle</span>
-                Já Assinado
-              </div>
-            )}
-            <button
-              onClick={() => {
-                setSelectedDocument('botox');
-                setShowDocumentModal(true);
-              }}
-              className="w-full py-2 bg-background-light text-text-main font-bold rounded-lg hover:bg-primary hover:text-white transition-colors border border-gray-200 hover:border-primary flex items-center justify-center gap-2"
-            >
-              <span className="material-symbols-outlined text-sm">print</span>
-              {signedDocuments.includes('botox') ? 'Imprimir Novamente' : 'Preencher & Imprimir'}
-            </button>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl border border-[#f3f2f1] shadow-sm hover:shadow-md transition-all group">
-          <div className="h-12 w-12 rounded-lg bg-pink-100 flex items-center justify-center text-pink-600 mb-4 group-hover:scale-110 transition-transform">
-            <span className="material-symbols-outlined text-2xl">spa</span>
-          </div>
-          <h4 className="font-bold text-text-main text-lg mb-2">Termo Bioestimulador</h4>
-          <p className="text-text-muted text-sm mb-6">Termo de consentimento para bioestimulador de colágeno.</p>
-          <div className="flex flex-col gap-3">
-            {signedDocuments.includes('bioestimulador') && (
-              <div className="w-full py-1.5 bg-green-50 text-green-700 font-bold rounded-lg border border-green-200 flex items-center justify-center gap-2 text-xs">
-                <span className="material-symbols-outlined text-sm">check_circle</span>
-                Já Assinado
-              </div>
-            )}
-            <button
-              onClick={() => {
-                setSelectedDocument('bioestimulador');
-                setShowDocumentModal(true);
-              }}
-              className="w-full py-2 bg-background-light text-text-main font-bold rounded-lg hover:bg-pink-500 hover:text-white transition-colors border border-gray-200 hover:border-pink-500 flex items-center justify-center gap-2"
-            >
-              <span className="material-symbols-outlined text-sm">print</span>
-              {signedDocuments.includes('bioestimulador') ? 'Imprimir Novamente' : 'Preencher & Imprimir'}
-            </button>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl border border-[#f3f2f1] shadow-sm hover:shadow-md transition-all group">
-          <div className="h-12 w-12 rounded-lg bg-orange-100 flex items-center justify-center text-orange-600 mb-4 group-hover:scale-110 transition-transform">
-            <span className="material-symbols-outlined text-2xl">texture</span>
-          </div>
-          <h4 className="font-bold text-text-main text-lg mb-2">Termo Fio PDO</h4>
-          <p className="text-text-muted text-sm mb-6">Termo de consentimento para implante de fios de PDO.</p>
-          <div className="flex flex-col gap-3">
-            {signedDocuments.includes('fio-pdo') && (
-              <div className="w-full py-1.5 bg-green-50 text-green-700 font-bold rounded-lg border border-green-200 flex items-center justify-center gap-2 text-xs">
-                <span className="material-symbols-outlined text-sm">check_circle</span>
-                Já Assinado
-              </div>
-            )}
-            <button
-              onClick={() => {
-                setSelectedDocument('fio-pdo');
-                setShowDocumentModal(true);
-              }}
-              className="w-full py-2 bg-background-light text-text-main font-bold rounded-lg hover:bg-orange-500 hover:text-white transition-colors border border-gray-200 hover:border-orange-500 flex items-center justify-center gap-2"
-            >
-              <span className="material-symbols-outlined text-sm">print</span>
-              {signedDocuments.includes('fio-pdo') ? 'Imprimir Novamente' : 'Preencher & Imprimir'}
-            </button>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl border border-[#f3f2f1] shadow-sm hover:shadow-md transition-all group">
-          <div className="h-12 w-12 rounded-lg bg-blue-100 flex items-center justify-center text-blue-600 mb-4 group-hover:scale-110 transition-transform">
-            <span className="material-symbols-outlined text-2xl">medical_services</span>
-          </div>
-          <h4 className="font-bold text-text-main text-lg mb-2">Carta Hialuronidase</h4>
-          <p className="text-text-muted text-sm mb-6">Carta de informação ao paciente sobre Hialuronidase.</p>
-          <div className="flex flex-col gap-3">
-            {signedDocuments.includes('hialuronidase') && (
-              <div className="w-full py-1.5 bg-green-50 text-green-700 font-bold rounded-lg border border-green-200 flex items-center justify-center gap-2 text-xs">
-                <span className="material-symbols-outlined text-sm">check_circle</span>
-                Já Assinado
-              </div>
-            )}
-            <button
-              onClick={() => {
-                setSelectedDocument('hialuronidase');
-                setShowDocumentModal(true);
-              }}
-              className="w-full py-2 bg-background-light text-text-main font-bold rounded-lg hover:bg-blue-500 hover:text-white transition-colors border border-gray-200 hover:border-blue-500 flex items-center justify-center gap-2"
-            >
-              <span className="material-symbols-outlined text-sm">print</span>
-              {signedDocuments.includes('hialuronidase') ? 'Imprimir Novamente' : 'Preencher & Imprimir'}
-            </button>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl border border-[#f3f2f1] shadow-sm hover:shadow-md transition-all group">
-          <div className="h-12 w-12 rounded-lg bg-teal-100 flex items-center justify-center text-teal-600 mb-4 group-hover:scale-110 transition-transform">
-            <span className="material-symbols-outlined text-2xl">water_drop</span>
-          </div>
-          <h4 className="font-bold text-text-main text-lg mb-2">Termo Hidrolipo</h4>
-          <p className="text-text-muted text-sm mb-6">Consentimento para Hidrolipoclasia Ultrassônica.</p>
-          <div className="flex flex-col gap-3">
-            {signedDocuments.includes('hidrolipo') && (
-              <div className="w-full py-1.5 bg-green-50 text-green-700 font-bold rounded-lg border border-green-200 flex items-center justify-center gap-2 text-xs">
-                <span className="material-symbols-outlined text-sm">check_circle</span>
-                Já Assinado
-              </div>
-            )}
-            <button
-              onClick={() => {
-                setSelectedDocument('hidrolipo');
-                setShowDocumentModal(true);
-              }}
-              className="w-full py-2 bg-background-light text-text-main font-bold rounded-lg hover:bg-teal-500 hover:text-white transition-colors border border-gray-200 hover:border-teal-500 flex items-center justify-center gap-2"
-            >
-              <span className="material-symbols-outlined text-sm">print</span>
-              {signedDocuments.includes('hidrolipo') ? 'Imprimir Novamente' : 'Preencher & Imprimir'}
-            </button>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl border border-[#f3f2f1] shadow-sm hover:shadow-md transition-all group">
-          <div className="h-12 w-12 rounded-lg bg-pink-100 flex items-center justify-center text-pink-600 mb-4 group-hover:scale-110 transition-transform">
-            <span className="material-symbols-outlined text-2xl">vaccines</span>
-          </div>
-          <h4 className="font-bold text-text-main text-lg mb-2">Termo Intradermo</h4>
-          <p className="text-text-muted text-sm mb-6">Consentimento para Intradermoterapia.</p>
-          <div className="flex flex-col gap-3">
-            {signedDocuments.includes('intradermo') && (
-              <div className="w-full py-1.5 bg-green-50 text-green-700 font-bold rounded-lg border border-green-200 flex items-center justify-center gap-2 text-xs">
-                <span className="material-symbols-outlined text-sm">check_circle</span>
-                Já Assinado
-              </div>
-            )}
-            <button
-              onClick={() => {
-                setSelectedDocument('intradermo');
-                setShowDocumentModal(true);
-              }}
-              className="w-full py-2 bg-background-light text-text-main font-bold rounded-lg hover:bg-pink-500 hover:text-white transition-colors border border-gray-200 hover:border-pink-500 flex items-center justify-center gap-2"
-            >
-              <span className="material-symbols-outlined text-sm">print</span>
-              {signedDocuments.includes('intradermo') ? 'Imprimir Novamente' : 'Preencher & Imprimir'}
-            </button>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl border border-[#f3f2f1] shadow-sm hover:shadow-md transition-all group">
-          <div className="h-12 w-12 rounded-lg bg-purple-100 flex items-center justify-center text-purple-600 mb-4 group-hover:scale-110 transition-transform">
-            <span className="material-symbols-outlined text-2xl">face_retouching_natural</span>
-          </div>
-          <h4 className="font-bold text-text-main text-lg mb-2">Termo Lifting</h4>
-          <p className="text-text-muted text-sm mb-6">Consentimento para Lifting Temporal.</p>
-          <div className="flex flex-col gap-3">
-            {signedDocuments.includes('lifting') && (
-              <div className="w-full py-1.5 bg-green-50 text-green-700 font-bold rounded-lg border border-green-200 flex items-center justify-center gap-2 text-xs">
-                <span className="material-symbols-outlined text-sm">check_circle</span>
-                Já Assinado
-              </div>
-            )}
-            <button
-              onClick={() => {
-                setSelectedDocument('lifting');
-                setShowDocumentModal(true);
-              }}
-              className="w-full py-2 bg-background-light text-text-main font-bold rounded-lg hover:bg-purple-500 hover:text-white transition-colors border border-gray-200 hover:border-purple-500 flex items-center justify-center gap-2"
-            >
-              <span className="material-symbols-outlined text-sm">print</span>
-              {signedDocuments.includes('lifting') ? 'Imprimir Novamente' : 'Preencher & Imprimir'}
-            </button>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl border border-[#f3f2f1] shadow-sm hover:shadow-md transition-all group">
-          <div className="h-12 w-12 rounded-lg bg-orange-100 flex items-center justify-center text-orange-600 mb-4 group-hover:scale-110 transition-transform">
-            <span className="material-symbols-outlined text-2xl">grid_on</span>
-          </div>
-          <h4 className="font-bold text-text-main text-lg mb-2">Termo Microagulhamento</h4>
-          <p className="text-text-muted text-sm mb-6">Consentimento para Microagulhamento.</p>
-          <div className="flex flex-col gap-3">
-            {signedDocuments.includes('microagulhamento') && (
-              <div className="w-full py-1.5 bg-green-50 text-green-700 font-bold rounded-lg border border-green-200 flex items-center justify-center gap-2 text-xs">
-                <span className="material-symbols-outlined text-sm">check_circle</span>
-                Já Assinado
-              </div>
-            )}
-            <button
-              onClick={() => {
-                setSelectedDocument('microagulhamento');
-                setShowDocumentModal(true);
-              }}
-              className="w-full py-2 bg-background-light text-text-main font-bold rounded-lg hover:bg-orange-500 hover:text-white transition-colors border border-gray-200 hover:border-orange-500 flex items-center justify-center gap-2"
-            >
-              <span className="material-symbols-outlined text-sm">print</span>
-              {signedDocuments.includes('microagulhamento') ? 'Imprimir Novamente' : 'Preencher & Imprimir'}
-            </button>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl border border-[#f3f2f1] shadow-sm hover:shadow-md transition-all group">
-          <div className="h-12 w-12 rounded-lg bg-teal-100 flex items-center justify-center text-teal-600 mb-4 group-hover:scale-110 transition-transform">
-            <span className="material-symbols-outlined text-2xl">healing</span>
-          </div>
-          <h4 className="font-bold text-text-main text-lg mb-2">Termo Peeling</h4>
-          <p className="text-text-muted text-sm mb-6">Consentimento para Tratamento com Peeling.</p>
-          <div className="flex flex-col gap-3">
-            {signedDocuments.includes('peeling') && (
-              <div className="w-full py-1.5 bg-green-50 text-green-700 font-bold rounded-lg border border-green-200 flex items-center justify-center gap-2 text-xs">
-                <span className="material-symbols-outlined text-sm">check_circle</span>
-                Já Assinado
-              </div>
-            )}
-            <button
-              onClick={() => {
-                setSelectedDocument('peeling');
-                setShowDocumentModal(true);
-              }}
-              className="w-full py-2 bg-background-light text-text-main font-bold rounded-lg hover:bg-teal-500 hover:text-white transition-colors border border-gray-200 hover:border-teal-500 flex items-center justify-center gap-2"
-            >
-              <span className="material-symbols-outlined text-sm">print</span>
-              {signedDocuments.includes('peeling') ? 'Imprimir Novamente' : 'Preencher & Imprimir'}
-            </button>
-          </div>
-        </div>
-
-        <div className="bg-white p-6 rounded-xl border border-[#f3f2f1] shadow-sm hover:shadow-md transition-all group">
-          <div className="h-12 w-12 rounded-lg bg-pink-100 flex items-center justify-center text-pink-600 mb-4 group-hover:scale-110 transition-transform">
-            <span className="material-symbols-outlined text-2xl">vaccines</span>
-          </div>
-          <h4 className="font-bold text-text-main text-lg mb-2">Termo Preenchimento</h4>
-          <p className="text-text-muted text-sm mb-6">Consentimento para Preenchimento Facial.</p>
-          <div className="flex flex-col gap-3">
-            {signedDocuments.includes('preenchimento') && (
-              <div className="w-full py-1.5 bg-green-50 text-green-700 font-bold rounded-lg border border-green-200 flex items-center justify-center gap-2 text-xs">
-                <span className="material-symbols-outlined text-sm">check_circle</span>
-                Já Assinado
-              </div>
-            )}
-            <button
-              onClick={() => {
-                setSelectedDocument('preenchimento');
-                setShowDocumentModal(true);
-              }}
-              className="w-full py-2 bg-background-light text-text-main font-bold rounded-lg hover:bg-pink-500 hover:text-white transition-colors border border-gray-200 hover:border-pink-500 flex items-center justify-center gap-2"
-            >
-              <span className="material-symbols-outlined text-sm">print</span>
-              {signedDocuments.includes('preenchimento') ? 'Imprimir Novamente' : 'Preencher & Imprimir'}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+    );
+  };
 
   if (loading || !currentPatient) {
     return (
@@ -1998,6 +2505,8 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                     cpf: "123.456.789-00",
                     alergias: anamnesisAllergies || currentPatient.allergies
                   }}
+                  signatureUrl={currentSignatureUrl}
+                  signatureDate={viewingSignedDoc?.signed_at}
                 />
               )}
               {selectedDocument === 'bioestimulador' && (
@@ -2009,6 +2518,8 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                     cpf: "123.456.789-00",
                     alergias: anamnesisAllergies || currentPatient.allergies
                   }}
+                  signatureUrl={currentSignatureUrl}
+                  signatureDate={viewingSignedDoc?.signed_at}
                 />
               )}
               {selectedDocument === 'fio-pdo' && (
@@ -2020,6 +2531,8 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                     cpf: "123.456.789-00",
                     alergias: anamnesisAllergies || currentPatient.allergies
                   }}
+                  signatureUrl={currentSignatureUrl}
+                  signatureDate={viewingSignedDoc?.signed_at}
                 />
               )}
               {selectedDocument === 'hialuronidase' && (
@@ -2031,6 +2544,8 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                     cpf: "123.456.789-00",
                     alergias: anamnesisAllergies || currentPatient.allergies
                   }}
+                  signatureUrl={currentSignatureUrl}
+                  signatureDate={viewingSignedDoc?.signed_at}
                 />
               )}
               {selectedDocument === 'hidrolipo' && (
@@ -2042,6 +2557,8 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                     cpf: "123.456.789-00",
                     alergias: anamnesisAllergies || currentPatient.allergies
                   }}
+                  signatureUrl={currentSignatureUrl}
+                  signatureDate={viewingSignedDoc?.signed_at}
                 />
               )}
               {selectedDocument === 'intradermo' && (
@@ -2053,6 +2570,8 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                     cpf: "123.456.789-00",
                     alergias: anamnesisAllergies || currentPatient.allergies
                   }}
+                  signatureUrl={currentSignatureUrl}
+                  signatureDate={viewingSignedDoc?.signed_at}
                 />
               )}
               {selectedDocument === 'lifting' && (

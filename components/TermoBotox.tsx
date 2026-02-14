@@ -8,17 +8,18 @@ interface TermoProps {
         dataNascimento: string;
         telefone: string;
         cpf: string;
-
         alergias: string | string[];
-    }
+    };
+    signatureUrl?: string | null;
+    signatureDate?: string;
 }
 
-const TermoBotox: React.FC<TermoProps> = ({ paciente }) => {
+const TermoBotox: React.FC<TermoProps> = ({ paciente, signatureUrl, signatureDate }) => {
     const textoAlergias = Array.isArray(paciente.alergias)
         ? (paciente.alergias.length > 0 ? paciente.alergias.join(", ") : "Nego alergias conhecidas")
         : (paciente.alergias || "Nego alergias conhecidas");
 
-    const today = formatDate(new Date());
+    const today = signatureDate ? formatDate(new Date(signatureDate)) : formatDate(new Date());
 
     return (
         <div className="w-[210mm] min-h-[297mm] p-[20mm] bg-white text-black font-sans text-sm leading-relaxed mx-auto shadow-md print:shadow-none print:w-full print:min-h-0 print:h-auto print:m-0 print:p-[20mm]">
@@ -83,8 +84,17 @@ const TermoBotox: React.FC<TermoProps> = ({ paciente }) => {
 
             <div className="mt-8 break-inside-avoid">
                 <div className="flex items-end justify-between">
-                    <div className="border-t border-black w-2/3 pt-1 text-center text-xs">
-                        Assinatura Paciente
+                    <div className="w-2/3 relative">
+                        {signatureUrl && (
+                            <img
+                                src={signatureUrl}
+                                alt="Assinatura"
+                                className="absolute bottom-2 left-1/2 transform -translate-x-1/2 max-h-16 mix-blend-multiply"
+                            />
+                        )}
+                        <div className="border-t border-black pt-1 text-center text-xs">
+                            Assinatura Paciente
+                        </div>
                     </div>
                     <div className="text-xs">
                         DATA: {today}
@@ -105,7 +115,14 @@ const TermoBotox: React.FC<TermoProps> = ({ paciente }) => {
             </div>
 
             <div className="mt-12 flex justify-between items-end text-xs font-bold uppercase break-inside-avoid">
-                <div className="w-5/12 text-center">
+                <div className="w-5/12 text-center relative">
+                    {signatureUrl && (
+                        <img
+                            src={signatureUrl}
+                            alt="Assinatura"
+                            className="absolute bottom-4 left-1/2 transform -translate-x-1/2 max-h-16 mix-blend-multiply"
+                        />
+                    )}
                     <div className="border-t border-black pt-1 mb-1">Assinatura Paciente</div>
                     <p>CPF: {paciente.cpf}</p>
                 </div>

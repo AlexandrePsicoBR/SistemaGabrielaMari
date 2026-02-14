@@ -49,18 +49,6 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectPatient }) =>
   });
 
   useEffect(() => {
-    // Auth Listener to capture Google Token (it is lost on refresh otherwise)
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session?.provider_token) {
-        console.log('Google Token Captured & Saved');
-        localStorage.setItem('google_provider_token', session.provider_token);
-      }
-      // Optional: Capture refresh token if needed later
-      if (session?.provider_refresh_token) {
-        localStorage.setItem('google_refresh_token', session.provider_refresh_token);
-      }
-    });
-
     const fetchData = async () => {
       // 0. Appointments Today
       try {
@@ -281,7 +269,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectPatient }) =>
     fetchData();
 
     return () => {
-      authListener.subscription.unsubscribe();
+      // Cleanup if any
     };
   }, []);
 

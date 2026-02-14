@@ -12,15 +12,15 @@ interface TermoHidrolipoProps {
         alergias?: string | string[];
     };
     substancias?: string;
+    signatureUrl?: string | null;
+    signatureDate?: string;
 }
 
-const TermoHidrolipo: React.FC<TermoHidrolipoProps> = ({ paciente, substancias }) => {
+const TermoHidrolipo: React.FC<TermoHidrolipoProps> = ({ paciente, substancias, signatureUrl, signatureDate }) => {
     // Data de hoje (ex: "27 de Janeiro de 2026")
-    const dataHoje = formatDate(new Date(), {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric'
-    });
+    const dataHoje = signatureDate
+        ? formatDate(new Date(signatureDate), { day: 'numeric', month: 'long', year: 'numeric' })
+        : formatDate(new Date(), { day: 'numeric', month: 'long', year: 'numeric' });
 
     // Lógica de documento (RG prioridade sobre CPF neste caso, conforme solicitado "RG/CPF")
     // User said: "Se tiver RG, mostre o RG. Se não, mostre o CPF."
@@ -33,8 +33,6 @@ const TermoHidrolipo: React.FC<TermoHidrolipoProps> = ({ paciente, substancias }
     return (
         <div className="max-w-[210mm] mx-auto p-12 bg-white text-black font-serif text-sm leading-relaxed shadow-lg print:shadow-none print:w-full print:p-[20mm] print:m-0">
 
-            {/* TÍTULO */}
-            {/* TÍTULO */}
             <DocumentHeader
                 title={
                     <>
@@ -86,7 +84,14 @@ const TermoHidrolipo: React.FC<TermoHidrolipoProps> = ({ paciente, substancias }
             </div>
 
             {/* ASSINATURA */}
-            <div className="mt-16 break-inside-avoid w-2/3 mx-auto text-center">
+            <div className="mt-16 break-inside-avoid w-2/3 mx-auto text-center relative">
+                {signatureUrl && (
+                    <img
+                        src={signatureUrl}
+                        alt="Assinatura"
+                        className="absolute bottom-16 left-1/2 transform -translate-x-1/2 max-h-16 mix-blend-multiply"
+                    />
+                )}
                 <div className="mb-8 text-left">
                     <p className="font-bold uppercase text-xs mb-1">Nome Legível:</p>
                     <p className="uppercase border-b border-dotted border-gray-400 pb-1 w-full">{paciente.nome}</p>

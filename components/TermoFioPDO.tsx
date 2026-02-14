@@ -10,15 +10,15 @@ interface TermoFioPDOProps {
         cpf?: string;
         alergias?: string | string[];
     };
+    signatureUrl?: string | null;
+    signatureDate?: string;
 }
 
-const TermoFioPDO: React.FC<TermoFioPDOProps> = ({ paciente }) => {
+const TermoFioPDO: React.FC<TermoFioPDOProps> = ({ paciente, signatureUrl, signatureDate }) => {
     // Data formatada: "27 de Janeiro de 2026"
-    const dataHoje = formatDate(new Date(), {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric'
-    });
+    const dataHoje = signatureDate
+        ? formatDate(new Date(signatureDate), { day: 'numeric', month: 'long', year: 'numeric' })
+        : formatDate(new Date(), { day: 'numeric', month: 'long', year: 'numeric' });
 
     const textoAlergias = Array.isArray(paciente.alergias)
         ? (paciente.alergias.length > 0 ? paciente.alergias.join(", ") : "Nego alergias conhecidas")
@@ -80,7 +80,6 @@ const TermoFioPDO: React.FC<TermoFioPDOProps> = ({ paciente }) => {
             </div>
 
             {/* ASSINATURAS */}
-            {/* ASSINATURAS */}
             <div className="mt-8 flex justify-between items-end gap-10 break-inside-avoid px-4">
                 {/* Assinatura Profissional */}
                 <div className="w-1/2 text-center">
@@ -91,7 +90,14 @@ const TermoFioPDO: React.FC<TermoFioPDOProps> = ({ paciente }) => {
                 </div>
 
                 {/* Assinatura Paciente */}
-                <div className="w-1/2 text-center">
+                <div className="w-1/2 text-center relative">
+                    {signatureUrl && (
+                        <img
+                            src={signatureUrl}
+                            alt="Assinatura"
+                            className="absolute bottom-12 left-1/2 transform -translate-x-1/2 max-h-16 mix-blend-multiply"
+                        />
+                    )}
                     <div className="mb-8 text-left">
                         <p className="font-bold uppercase text-xs mb-1">Nome Legível:</p>
                         <p className="uppercase border-b border-dotted border-gray-400 pb-1">{paciente.nome}</p>

@@ -17,6 +17,7 @@ import PatientAppointments from './pages/patient/PatientAppointments';
 import PatientHistory from './pages/patient/PatientHistory';
 import PatientNews from './pages/patient/PatientNews';
 import PatientProfile from './pages/patient/PatientProfile';
+import PatientDocuments from './pages/patient/PatientDocuments';
 
 import { View } from './types';
 import { supabase } from './lib/supabase';
@@ -28,7 +29,8 @@ const App: React.FC = () => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const isAuthRef = React.useRef<boolean>(false); // Ref to track auth state inside closures
   const [isPasswordRecovery, setIsPasswordRecovery] = useState<boolean>(false);
-  const [loading, setLoading] = useState<boolean>(false); // Default false to show Login immediately
+  const [loading, setLoading] = useState<boolean>(true); // Start true to prevent flash of login screen
+
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [userRole, setUserRole] = useState<'admin' | 'patient' | null>(null);
   const [selectedPatientId, setSelectedPatientId] = useState<string | null>(null);
@@ -56,7 +58,6 @@ const App: React.FC = () => {
 
   useEffect(() => {
     // 1. Force Logout on Startup (Fix for "Always Login" requirement)
-    // 1. Force Logout on Startup (Fix for "Always Login" requirement)
     const initSession = async () => {
       // Check for recovery flow in URL
       // const isRecovery = window.location.hash && window.location.hash.includes('type=recovery');
@@ -83,6 +84,15 @@ const App: React.FC = () => {
 
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
+        // CAPTURE GOOGLE TOKEN HERE IF PRESENT (Initial Load)
+        if (session.provider_token) {
+          console.log('Google Token Captured on Init');
+          localStorage.setItem('google_provider_token', session.provider_token);
+        }
+        if (session.provider_refresh_token) {
+          localStorage.setItem('google_refresh_token', session.provider_refresh_token);
+        }
+
         setIsAuthenticated(true);
         isAuthRef.current = true;
         // Optionally fetch role here if needed, but onAuthStateChange usually handles it
@@ -105,6 +115,15 @@ const App: React.FC = () => {
     // 2. Listen for Explicit Login
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log('Auth Event:', event);
+
+      // GLOBAL TOKEN CAPTURE
+      if (session?.provider_token) {
+        console.log('Google Token Captured via Listener');
+        localStorage.setItem('google_provider_token', session.provider_token);
+      }
+      if (session?.provider_refresh_token) {
+        localStorage.setItem('google_refresh_token', session.provider_refresh_token);
+      }
 
       if (event === 'PASSWORD_RECOVERY') {
         setIsPasswordRecovery(true);
@@ -185,6 +204,8 @@ const App: React.FC = () => {
         return <PatientNews />;
       case 'patient-profile':
         return <PatientProfile />;
+      case 'patient-documents':
+        return <PatientDocuments />;
 
       default:
         // Fallback for unmatched views, try to stay within role context if possible

@@ -3,12 +3,22 @@ import { formatDate } from '../../lib/dateUtils';
 import { getSignedPhotoUrl } from '../../lib/imageUtils';
 import { supabase } from '../../lib/supabase';
 import { profileService } from '../../lib/profile';
+import PhotoViewerModal from '../../components/PhotoViewerModal';
 
 interface PhotoEntry {
     id: string;
     title: string;
     description: string;
-    before_url: string;
+    before_url: string; // These are coming from likely a raw select, but formatted later?
+    // Wait, the interface in PatientHistory uses snake_case, but PhotoViewerModal uses camelCase (PhotoEntry from NewPhotoModal).
+    // I need to check type compatibility.
+    // PatientHistory.tsx:
+    // interface PhotoEntry { id, title, description, before_url, after_url, date }
+    // PhotoViewerModal.tsx:
+    // import { PhotoEntry } from './NewPhotoModal';
+    // export interface PhotoEntry { id, title, description, beforeUrl, afterUrl, date }
+    // THEY ARE DIFFERENT.
+    // I need to map them when passing to the modal.
     after_url: string;
     date: string;
 }
@@ -17,6 +27,7 @@ const PatientHistory: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [photos, setPhotos] = useState<PhotoEntry[]>([]);
     const [sliderValue, setSliderValue] = useState(50);
+    const [selectedPhoto, setSelectedPhoto] = useState<any>(null); // Use any or map it properly
 
     useEffect(() => {
         const fetchPhotos = async () => {
@@ -148,7 +159,11 @@ const PatientHistory: React.FC = () => {
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                             {previousPhotos.map((photo) => (
-                                <div key={photo.id} className="group cursor-pointer">
+                                <div
+                                    key={photo.id}
+                                    className="group cursor-pointer"
+                                    onClick={() => setSelectedPhoto(photo)}
+                                >
                                     <div className="flex gap-2 mb-4 h-48">
                                         <div className="flex-1 rounded-lg overflow-hidden border border-[#e3e0de] bg-gray-900 transition-transform group-hover:scale-[1.02]">
                                             <div className="w-full h-full bg-center bg-contain bg-no-repeat" style={{ backgroundImage: `url('${photo.before_url}')` }}></div>
@@ -181,6 +196,19 @@ const PatientHistory: React.FC = () => {
                         </p>
                     </div>
                 </footer>
+                {selectedPhoto && (
+                    <PhotoViewerModal
+                        photo={{
+                            ...selectedPhoto,
+                            beforeUrl: selectedPhoto.before_url,
+                            afterUrl: selectedPhoto.after_url
+                        }}
+                        onClose={() => setSelectedPhoto(null)}
+                        readOnly={true}
+                        onUpdate={() => { }}
+                        onDelete={() => { }}
+                    />
+                )}
             </div>
         </div>
     );

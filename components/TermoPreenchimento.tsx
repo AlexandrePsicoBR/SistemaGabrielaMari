@@ -10,15 +10,15 @@ interface TermoPreenchimentoProps {
         cpf?: string;
         alergias?: string | string[];
     };
+    signatureUrl?: string | null;
+    signatureDate?: string;
 }
 
-const TermoPreenchimento: React.FC<TermoPreenchimentoProps> = ({ paciente }) => {
+const TermoPreenchimento: React.FC<TermoPreenchimentoProps> = ({ paciente, signatureUrl, signatureDate }) => {
     // Data formatada (ex: 27 de Janeiro de 2026)
-    const dataHoje = formatDate(new Date(), {
-        day: 'numeric',
-        month: 'long',
-        year: 'numeric'
-    });
+    const dataHoje = signatureDate
+        ? formatDate(new Date(signatureDate), { day: 'numeric', month: 'long', year: 'numeric' })
+        : formatDate(new Date(), { day: 'numeric', month: 'long', year: 'numeric' });
 
     const textoAlergias = Array.isArray(paciente.alergias)
         ? (paciente.alergias.length > 0 ? paciente.alergias.join(", ") : "Nego alergias conhecidas")
@@ -122,7 +122,14 @@ const TermoPreenchimento: React.FC<TermoPreenchimentoProps> = ({ paciente }) => 
                     </div>
 
                     {/* Assinatura Cliente */}
-                    <div className="w-1/2 text-center">
+                    <div className="w-1/2 text-center relative">
+                        {signatureUrl && (
+                            <img
+                                src={signatureUrl}
+                                alt="Assinatura"
+                                className="absolute bottom-10 left-1/2 transform -translate-x-1/2 max-h-16 mix-blend-multiply"
+                            />
+                        )}
                         <div className="border-t border-black pt-2">
                             <p className="font-bold uppercase mb-1">{paciente.nome}</p>
                             <p>Assinatura do Cliente</p>
