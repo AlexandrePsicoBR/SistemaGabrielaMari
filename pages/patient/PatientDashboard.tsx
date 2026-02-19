@@ -24,6 +24,7 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({ onNavigate }) => {
     const [loading, setLoading] = useState(true);
 
     const [expiredProcedures, setExpiredProcedures] = useState<any[]>([]);
+    const [pendingDocsCount, setPendingDocsCount] = useState(0);
 
     useEffect(() => {
         const fetchDashboardData = async () => {
@@ -67,6 +68,14 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({ onNavigate }) => {
                         .select('*', { count: 'exact', head: true })
                         .eq('patient_id', patient.id);
                     setPhotoCount(photos || 0);
+
+                    // --- Pending Documents ---
+                    const { count: pendingDocs } = await supabase
+                        .from('patient_documents')
+                        .select('*', { count: 'exact', head: true })
+                        .eq('patient_id', patient.id)
+                        .eq('status', 'pending');
+                    setPendingDocsCount(pendingDocs || 0);
                     // -----------------------------
 
                     // 1. Latest News (Fetch 3)
@@ -120,7 +129,11 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({ onNavigate }) => {
                             return expDateStr <= thirtyDaysStr;
                         }).sort((a: any, b: any) => new Date(a.expirationDate).getTime() - new Date(b.expirationDate).getTime());
 
-                        setExpiredProcedures(expirations);
+                        // Filter out dismissed items
+                        const dismissed = JSON.parse(localStorage.getItem('dismissed_procedures') || '[]');
+                        const filteredExpirations = expirations.filter((e: any) => !dismissed.includes(e.id));
+
+                        setExpiredProcedures(filteredExpirations);
                         // -----------------------------
                     }
 
@@ -150,6 +163,23 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({ onNavigate }) => {
         fetchDashboardData();
     }, []);
 
+    const handleReschedule = (proc: any) => {
+        // 1. Open WhatsApp
+        const isExpired = proc.expirationDate < new Date().toISOString().split('T')[0];
+        const message = `Olá, gostaria de agendar o retorno do procedimento ${proc.title} que ${isExpired ? 'venceu' : 'vence'} em ${formatDate(new Date(proc.expirationDate))}.`;
+        window.open(`https://wa.me/5512987029253?text=${encodeURIComponent(message)}`, '_blank');
+
+        // 2. Dismiss locally
+        const dismissed = JSON.parse(localStorage.getItem('dismissed_procedures') || '[]');
+        if (!dismissed.includes(proc.id)) {
+            dismissed.push(proc.id);
+            localStorage.setItem('dismissed_procedures', JSON.stringify(dismissed));
+        }
+
+        // 3. Update State
+        setExpiredProcedures(prev => prev.filter(p => p.id !== proc.id));
+    };
+
 
 
     return (
@@ -163,6 +193,29 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({ onNavigate }) => {
                         <p className="text-text-muted mt-2 text-lg">Aqui está o resumo do seu tratamento.</p>
                     </div>
                 </header>
+
+                {/* Pending Documents Alert */}
+                {pendingDocsCount > 0 && (
+                    <div className="bg-orange-50 border-l-4 border-orange-500 p-4 rounded-r shadow-sm flex flex-col md:flex-row items-center justify-between gap-4 animate-fade-in relative overflow-hidden">
+                        <div className="flex items-center gap-3 relative z-10">
+                            <span className="material-symbols-outlined text-orange-600 text-3xl">assignment_late</span>
+                            <div>
+                                <h3 className="font-bold text-orange-800 text-lg">Documentos Pendentes</h3>
+                                <p className="text-orange-700 text-sm">
+                                    Você tem <span className="font-bold">{pendingDocsCount}</span> documento(s) aguardando sua assinatura.
+                                </p>
+                            </div>
+                        </div>
+                        <button
+                            onClick={() => onNavigate?.('patient-documents')}
+                            className="bg-orange-600 text-white px-6 py-2 rounded-lg font-bold shadow hover:bg-orange-700 transition-colors whitespace-nowrap z-10"
+                        >
+                            Assinar Agora
+                        </button>
+                        {/* Decorative background icon */}
+                        <span className="material-symbols-outlined absolute -right-6 -bottom-6 text-9xl text-orange-100 opacity-50 z-0">description</span>
+                    </div>
+                )}
 
                 {/* Restored Balloons Section */}
                 <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -301,10 +354,7 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({ onNavigate }) => {
                                                 </div>
                                                 <div className="w-full md:w-auto text-right">
                                                     <button
-                                                        onClick={() => {
-                                                            const message = `Olá, gostaria de agendar o retorno do procedimento ${proc.title} que ${isExpired ? 'venceu' : 'vence'} em ${formatDate(expDate)}.`;
-                                                            window.open(`https://wa.me/5512987029253?text=${encodeURIComponent(message)}`, '_blank');
-                                                        }}
+                                                        onClick={() => handleReschedule(proc)}
                                                         className="w-full md:w-auto text-primary text-sm font-bold border border-primary px-4 py-2 rounded-lg hover:bg-primary hover:text-white transition-colors flex items-center justify-center gap-2"
                                                     >
                                                         <span className="material-symbols-outlined text-sm">calendar_add_on</span> Reagendar

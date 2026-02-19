@@ -174,7 +174,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       </div>
 
       {/* Right Side - Form */}
-      <div className="w-full md:w-1/2 flex items-center justify-center p-8 bg-[#FDFBF9]">
+      <div className="w-full md:w-1/2 flex items-center justify-center p-4 md:p-8 bg-[#FDFBF9]">
         <div className="w-full max-w-md space-y-8 animate-fade-in">
           <div className="text-center md:text-left">
             <div className="flex justify-center md:justify-start mb-6">

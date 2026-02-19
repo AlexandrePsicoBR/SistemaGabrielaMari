@@ -194,75 +194,115 @@ const Patients: React.FC<PatientsProps> = ({ onPatientClick }) => {
             <p className="mt-2">Carregando pacientes...</p>
           </div>
         ) : (
-          <table className="w-full text-left">
-            <thead className="bg-gray-50/50 border-b border-[#e3e0de]">
-              <tr>
-                <th className="px-6 py-4 text-xs font-semibold uppercase text-text-muted tracking-wider">Paciente</th>
-                <th className="px-6 py-4 text-xs font-semibold uppercase text-text-muted tracking-wider">Contato</th>
-                <th className="px-6 py-4 text-xs font-semibold uppercase text-text-muted tracking-wider">Último Procedimento</th>
-                <th className="px-6 py-4 text-xs font-semibold uppercase text-text-muted tracking-wider">Status</th>
-                <th className="px-6 py-4 text-right text-xs font-semibold uppercase text-text-muted tracking-wider">Ações</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[#e3e0de]">
-              {filteredPatients.map((patient) => (
-                <tr key={patient.id} onClick={() => onPatientClick(patient.id)} className="hover:bg-gray-50 transition-colors cursor-pointer group">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      {patient.avatar ? (
-                        <img src={patient.avatar} alt={patient.name} className="w-10 h-10 rounded-full object-cover" />
-                      ) : (
-                        <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-text-muted font-bold">
-                          {patient.initials || patient.name.charAt(0)}
-                        </div>
-                      )}
-                      <div>
-                        <p className="text-sm font-bold text-text-main">{patient.name}</p>
-                        <p className="text-xs text-text-muted">{patient.email}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col gap-0.5">
-                      <div className="flex items-center gap-1 text-sm text-text-main">
-                        <span className={`material-symbols-outlined text-[16px] ${patient.phoneType ? 'text-green-600' : 'text-text-muted'}`}>call</span>
-                        {patient.phone}
-                      </div>
-                      {patient.phoneType && <span className="text-xs text-text-muted">{patient.phoneType}</span>}
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <div className="flex flex-col">
-                      <span className="text-sm font-medium text-text-main">{patient.lastProcedure}</span>
-                      <span className="text-xs text-text-muted">{patient.lastDate}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    {patient.category === 'VIP' ? (
-                      <span className="inline-flex items-center rounded-full bg-[#fcf5eb] px-2.5 py-0.5 text-xs font-medium text-primary border border-primary/20">VIP</span>
-                    ) : patient.status === 'Ativo' ? (
-                      <span className="inline-flex items-center rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-700 border border-green-100">Ativo</span>
-                    ) : (
-                      <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600 border border-gray-200">Inativo</span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <button className="text-text-muted hover:text-text-main p-1 rounded-full hover:bg-gray-200">
-                      <span className="material-symbols-outlined text-[20px]">more_vert</span>
-                    </button>
-                  </td>
-                </tr>
-              ))}
-
-              {filteredPatients.length === 0 && (
+          <>
+            {/* Desktop Table */}
+            <table className="w-full text-left hidden md:table">
+              <thead className="bg-gray-50/50 border-b border-[#e3e0de]">
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-text-muted">
-                    Nenhum paciente encontrado.
-                  </td>
+                  <th className="px-6 py-4 text-xs font-semibold uppercase text-text-muted tracking-wider">Paciente</th>
+                  <th className="px-6 py-4 text-xs font-semibold uppercase text-text-muted tracking-wider">Contato</th>
+                  <th className="px-6 py-4 text-xs font-semibold uppercase text-text-muted tracking-wider">Último Procedimento</th>
+                  <th className="px-6 py-4 text-xs font-semibold uppercase text-text-muted tracking-wider">Status</th>
+                  <th className="px-6 py-4 text-right text-xs font-semibold uppercase text-text-muted tracking-wider">Ações</th>
                 </tr>
+              </thead>
+              <tbody className="divide-y divide-[#e3e0de]">
+                {filteredPatients.map((patient) => (
+                  <tr key={patient.id} onClick={() => onPatientClick(patient.id)} className="hover:bg-gray-50 transition-colors cursor-pointer group">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-3">
+                        {patient.avatar ? (
+                          <img src={patient.avatar} alt={patient.name} className="w-10 h-10 rounded-full object-cover" />
+                        ) : (
+                          <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center text-text-muted font-bold">
+                            {patient.initials || patient.name.charAt(0)}
+                          </div>
+                        )}
+                        <div>
+                          <p className="text-sm font-bold text-text-main">{patient.name}</p>
+                          <p className="text-xs text-text-muted">{patient.email}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex items-center gap-1 text-sm text-text-main">
+                          <span className={`material-symbols-outlined text-[16px] ${patient.phoneType ? 'text-green-600' : 'text-text-muted'}`}>call</span>
+                          {patient.phone}
+                        </div>
+                        {patient.phoneType && <span className="text-xs text-text-muted">{patient.phoneType}</span>}
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium text-text-main">{patient.lastProcedure}</span>
+                        <span className="text-xs text-text-muted">{patient.lastDate}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4">
+                      {patient.category === 'VIP' ? (
+                        <span className="inline-flex items-center rounded-full bg-[#fcf5eb] px-2.5 py-0.5 text-xs font-medium text-primary border border-primary/20">VIP</span>
+                      ) : patient.status === 'Ativo' ? (
+                        <span className="inline-flex items-center rounded-full bg-green-50 px-2.5 py-0.5 text-xs font-medium text-green-700 border border-green-100">Ativo</span>
+                      ) : (
+                        <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600 border border-gray-200">Inativo</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <button className="text-text-muted hover:text-text-main p-1 rounded-full hover:bg-gray-200">
+                        <span className="material-symbols-outlined text-[20px]">more_vert</span>
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {filteredPatients.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="py-8 text-center text-text-muted">
+                      Nenhum paciente encontrado.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+
+            {/* Mobile Card View */}
+            <div className="md:hidden divide-y divide-[#e3e0de]">
+              {filteredPatients.map((patient) => (
+                <div key={patient.id} onClick={() => onPatientClick(patient.id)} className="p-4 active:bg-gray-50 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    {patient.avatar ? (
+                      <img src={patient.avatar} alt={patient.name} className="w-12 h-12 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center text-text-muted font-bold text-lg">
+                        {patient.initials || patient.name.charAt(0)}
+                      </div>
+                    )}
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="font-bold text-text-main">{patient.name}</p>
+                        {patient.category === 'VIP' && (
+                          <span className="inline-flex items-center rounded-full bg-[#fcf5eb] px-1.5 py-0.5 text-[10px] font-bold text-primary border border-primary/20">VIP</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-text-muted flex items-center gap-1 mt-0.5">
+                        <span className="material-symbols-outlined text-[14px]">call</span>
+                        {patient.phone}
+                      </p>
+                      <p className="text-[10px] text-text-muted mt-1">
+                        Últ.: {patient.lastProcedure} ({patient.lastDate})
+                      </p>
+                    </div>
+                  </div>
+                  <span className="material-symbols-outlined text-gray-300">chevron_right</span>
+                </div>
+              ))}
+              {filteredPatients.length === 0 && (
+                <div className="py-8 text-center text-text-muted">
+                  Nenhum paciente encontrado.
+                </div>
               )}
-            </tbody>
-          </table>
+            </div>
+          </>
         )}
       </div>
 

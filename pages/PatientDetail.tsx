@@ -635,6 +635,25 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
     }
   };
 
+  const handleDeleteTransaction = async (id: string) => {
+    if (!window.confirm('Tem certeza que deseja excluir este lançamento financeiro?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('transactions')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
+      setFinancialRecords(financialRecords.filter(r => r.id !== id));
+
+    } catch (error) {
+      console.error('Error deleting transaction:', error);
+      alert('Erro ao excluir lançamento.');
+    }
+  };
+
   const handleDownloadPDF = () => {
     const doc = new jsPDF();
     const primaryColor = [200, 100, 100] as [number, number, number]; // Rose
@@ -700,13 +719,22 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
     doc.text("Histórico de Procedimentos", 14, currentY);
     currentY += 5;
 
-    const historyTableData = historyData.map(event => [
-      event.date,
-      event.title,
-      event.doctor,
-      event.description || event.patientSummary || '-',
-      event.status
-    ]);
+    const historyTableData = historyData.map(event => {
+      // Concatenate all details, filtering out empty ones
+      const details = [
+        event.description,
+        event.patientSummary ? `Resumo Paciente: ${event.patientSummary}` : null,
+        event.clinicalNotes ? `Notas Clínicas: ${event.clinicalNotes}` : null
+      ].filter(Boolean).join('\n\n') || '-';
+
+      return [
+        event.date,
+        event.title,
+        event.doctor,
+        details,
+        event.status
+      ];
+    });
 
     autoTable(doc, {
       startY: currentY,
@@ -736,8 +764,13 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
     currentY += 10;
 
     // Financial Totals
-    const totalPaid = financialRecords.filter(r => r.status === 'Pago').reduce((acc, curr) => acc + curr.value, 0);
-    const totalPending = financialRecords.filter(r => r.status === 'Pendente').reduce((acc, curr) => acc + curr.value, 0);
+    const totalPaid = financialRecords
+      .filter(r => r.status === 'Pago' || r.status === 'Recebido')
+      .reduce((acc, curr) => acc + curr.value, 0);
+
+    const totalPending = financialRecords
+      .filter(r => r.status === 'Pendente' || r.status === 'Em aberto')
+      .reduce((acc, curr) => acc + curr.value, 0);
 
     doc.setFontSize(10);
     doc.setTextColor(0, 150, 0); // Green
@@ -999,6 +1032,35 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
     }
   };
 
+  const handleDismissExpiration = async (id: string) => {
+    if (!window.confirm('Deseja remover este aviso de vencimento? O histórico do procedimento será mantido.')) return;
+
+    try {
+      // Find the event
+      const eventToUpdate = historyData.find(h => h.id === id);
+      if (!eventToUpdate) return;
+
+      const currentTags = eventToUpdate.tags || [];
+      const newTags = [...currentTags, 'canceled_expiration'];
+
+      const { error } = await supabase
+        .from('clinical_history')
+        .update({ tags: newTags })
+        .eq('id', id);
+
+      if (error) throw error;
+
+      // Update local state
+      setHistoryData(historyData.map(h =>
+        h.id === id ? { ...h, tags: newTags } : h
+      ));
+
+    } catch (error) {
+      console.error('Error dismissing expiration:', error);
+      alert('Erro ao remover aviso.');
+    }
+  };
+
   const renderOverview = () => (
     <>
 
@@ -1197,6 +1259,9 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                 const expStr = h.expirationDate;
                 const thirtyDaysStr = thirtyDays.toISOString().split('T')[0];
 
+                // Filter out dismissed expirations
+                if (h.tags?.includes('canceled_expiration')) return false;
+
                 return expStr <= thirtyDaysStr;
               }).sort((a, b) => new Date(a.expirationDate!).getTime() - new Date(b.expirationDate!).getTime())
                 .map((proc, idx) => {
@@ -1217,7 +1282,16 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                           </p>
                         </div>
                       </div>
-                      <div className="text-right">
+                      <div className="text-right flex items-center gap-2">
+                        {userRole === 'admin' && (
+                          <button
+                            onClick={() => handleDismissExpiration(proc.id)}
+                            className="text-red-500 text-sm font-bold px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors flex items-center gap-1"
+                            title="Apagar Aviso"
+                          >
+                            <span className="material-symbols-outlined text-sm">delete</span>
+                          </button>
+                        )}
                         <button
                           onClick={() => {
                             const message = `Olá, gostaria de agendar o retorno do procedimento ${proc.title} que ${isExpired ? 'venceu' : 'vence'} em ${formatDate(expDate)}.`;
@@ -1542,25 +1616,29 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
 
   const renderFinancial = () => (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex justify-between items-center mb-2">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
         <div>
           <h3 className="font-bold text-lg text-text-main">Histórico Financeiro</h3>
           <p className="text-text-muted text-sm">Pagamentos e orçamentos do paciente</p>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="flex gap-2">
-            <div className="px-4 py-2 bg-green-50 text-green-700 rounded-lg border border-green-100 text-sm font-bold">
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+          <div className="flex flex-wrap gap-2 w-full md:w-auto">
+            <div className="flex-1 md:flex-none px-4 py-2 bg-green-50 text-green-700 rounded-lg border border-green-100 text-sm font-bold min-w-[120px]">
               <span className="block text-[10px] uppercase text-green-600 font-normal">Total Pago</span>
               R$ {financialRecords.filter(r => r.status === 'Pago' || r.status === 'Recebido').reduce((acc, curr) => acc + curr.value, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </div>
-            <div className="px-4 py-2 bg-orange-50 text-orange-700 rounded-lg border border-orange-100 text-sm font-bold">
+            <div className="flex-1 md:flex-none px-4 py-2 bg-red-50 text-red-700 rounded-lg border border-red-100 text-sm font-bold min-w-[120px]">
+              <span className="block text-[10px] uppercase text-red-600 font-normal">Total Custo</span>
+              R$ {financialRecords.filter(r => r.type === 'income').reduce((acc, curr) => acc + (curr.cost || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </div>
+            <div className="flex-1 md:flex-none px-4 py-2 bg-orange-50 text-orange-700 rounded-lg border border-orange-100 text-sm font-bold min-w-[120px]">
               <span className="block text-[10px] uppercase text-orange-600 font-normal">Em Aberto</span>
               R$ {financialRecords.filter(r => r.status === 'Pendente' || r.status === 'Em aberto').reduce((acc, curr) => acc + curr.value, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
             </div>
             {userRole === 'admin' && (
               <button
                 onClick={handleAddPayment}
-                className="bg-primary text-white text-sm font-bold px-4 py-2 rounded-lg hover:bg-primary-dark transition-colors flex items-center gap-2 shadow-sm"
+                className="flex-1 md:flex-none bg-primary text-white text-sm font-bold px-4 py-2 rounded-lg hover:bg-primary-dark transition-colors flex items-center justify-center gap-2 shadow-sm min-w-[140px]"
               >
                 <span className="material-symbols-outlined text-sm">add</span>
                 Add Pagamento
@@ -1571,7 +1649,8 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-[#f3f2f1] overflow-hidden">
-        <table className="w-full text-left">
+        {/* Desktop Table */}
+        <table className="w-full text-left hidden md:table">
           <thead className="bg-[#fcfaf8] border-b border-[#f3f2f1]">
             <tr>
               <th className="py-4 px-6 text-xs font-bold text-text-muted uppercase">Data</th>
@@ -1627,13 +1706,22 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                 </td>
                 <td className="py-4 px-6 text-right">
                   {userRole === 'admin' && (
-                    <button
-                      onClick={() => handleEditPayment(record)}
-                      className="text-text-muted hover:text-primary p-2 hover:bg-gray-100 rounded-full transition-colors"
-                      title="Editar Detalhes"
-                    >
-                      <span className="material-symbols-outlined text-[18px]">edit</span>
-                    </button>
+                    <div className="flex items-center justify-end gap-1">
+                      <button
+                        onClick={() => handleDeleteTransaction(record.id)}
+                        className="text-text-muted hover:text-red-500 p-2 hover:bg-red-50 rounded-full transition-colors"
+                        title="Excluir Lançamento"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">delete</span>
+                      </button>
+                      <button
+                        onClick={() => handleEditPayment(record)}
+                        className="text-text-muted hover:text-primary p-2 hover:bg-gray-100 rounded-full transition-colors"
+                        title="Editar Detalhes"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">edit</span>
+                      </button>
+                    </div>
                   )}
                 </td>
               </tr>
@@ -1648,6 +1736,69 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
             )}
           </tbody>
         </table>
+
+        {/* Mobile Card View */}
+        <div className="md:hidden divide-y divide-[#f3f2f1]">
+          {financialRecords.map((record) => (
+            <div key={record.id} className="p-4 flex flex-col gap-3">
+              <div className="flex justify-between items-start">
+                <div>
+                  <span className="text-xs text-text-muted block mb-1 uppercase font-bold tracking-wide">
+                    {formatDate(new Date(record.date), { day: '2-digit', month: 'short' })}
+                  </span>
+                  <span className="font-bold text-text-main block">{record.description.split(' - ')[0]}</span>
+                  <span className="text-xs text-text-muted">{record.description.split(' - ')[1] || record.category}</span>
+                </div>
+                <div className="text-right">
+                  <span className={`block font-bold ${record.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(record.value)}
+                  </span>
+                  {record.paymentMethod && (
+                    <span className="text-xs text-text-muted block mt-1">{record.paymentMethod}</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center pt-2 border-t border-gray-50">
+                <span className={`px-2 py-1 rounded text-[10px] font-bold border uppercase ${record.status === 'Pago' || record.status === 'Recebido'
+                  ? 'bg-green-100 text-green-700 border-green-200'
+                  : record.status === 'Em aberto' || record.status === 'Pendente'
+                    ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                    : record.status === 'Não pago'
+                      ? 'bg-gray-800 text-white border-gray-700'
+                      : 'bg-gray-100 text-gray-700'
+                  }`}>
+                  {record.status}
+                </span>
+
+                {userRole === 'admin' && (
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleDeleteTransaction(record.id)}
+                      className="text-red-500 text-sm font-bold flex items-center gap-1 hover:bg-red-50 px-2 py-1 rounded transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">delete</span>
+                      Excluir
+                    </button>
+                    <button
+                      onClick={() => handleEditPayment(record)}
+                      className="text-primary text-sm font-bold flex items-center gap-1 hover:bg-primary/5 px-2 py-1 rounded transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">edit</span>
+                      Editar
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+
+          {financialRecords.length === 0 && (
+            <div className="py-8 text-center text-text-muted px-4">
+              Nenhum registro financeiro encontrado.
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -2266,8 +2417,8 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
   }
 
   return (
-    <div className="flex flex-col h-full animate-fade-in print:block print:h-auto print:overflow-visible print:relative">
-      <div className="px-8 py-6 border-b border-[#f3f2f1] bg-white sticky top-0 z-10 print:static print:border-none print:p-0 print:mb-8">
+    <div className="flex flex-col min-h-full animate-fade-in print:block print:h-auto print:overflow-visible print:relative pb-10">
+      <div className="px-8 py-6 border-b border-[#f3f2f1] bg-white print:static print:border-none print:p-0 print:mb-8">
         <button onClick={onBack} className="flex items-center gap-2 text-sm text-text-muted hover:text-primary mb-4 transition-colors print:hidden">
           <span className="material-symbols-outlined text-sm">arrow_back</span>
           Voltar para Pacientes
@@ -2363,13 +2514,15 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
             </button>
           </div>
         </div>
+      </div>
 
-        <div className="flex gap-8 mt-8 border-b border-[#f3f2f1] print:hidden">
+      <div className="bg-white sticky top-0 z-10 border-b border-[#f3f2f1] px-8 pt-2 print:hidden">
+        <div className="flex gap-4 md:gap-8 overflow-x-auto pb-1 scrollbar-hide">
           {tabs.map((tab) => (
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`pb-4 text-sm font-medium transition-all relative ${activeTab === tab.id
+              className={`pb-4 text-sm font-medium transition-all relative whitespace-nowrap px-2 ${activeTab === tab.id
                 ? 'text-primary'
                 : 'text-text-muted hover:text-text-main'
                 }`}
@@ -2383,7 +2536,7 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
         </div>
       </div>
 
-      <div className={`flex-1 overflow-y-auto bg-background-light p-8 ${showDocumentModal ? 'print:hidden' : ''}`}>
+      <div className={`p-8 bg-background-light ${showDocumentModal ? 'print:hidden' : ''}`}>
         <div className="max-w-5xl mx-auto space-y-6">
           {activeTab === 'overview' && renderOverview()}
           {activeTab === 'history' && renderHistory()}

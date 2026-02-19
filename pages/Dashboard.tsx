@@ -558,14 +558,14 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectPatient }) =>
 
   return (
     <div className="p-8 max-w-7xl mx-auto space-y-8 animate-fade-in">
-      <div className="flex justify-between items-end">
+      <div className="flex flex-col md:flex-row md:justify-between md:items-end gap-6 text-center md:text-left">
         <div>
           <h2 className="text-3xl font-serif font-bold text-text-main">Bom dia, Gabriela</h2>
           <p className="text-text-muted mt-1">
-            Visão geral do consultório hoje, {formatDate(new Date(), { day: 'numeric', month: 'long' }).replace(/ de (.{1})/g, (match: string, p1: string) => ` de ${p1.toUpperCase()}`)}.
+            Hoje, {formatDate(new Date(), { day: 'numeric', month: 'long' }).replace(/ de (.{1})/g, (match: string, p1: string) => ` de ${p1.toUpperCase()}`)}.
           </p>
         </div>
-        <div className="flex gap-3 items-center">
+        <div className="flex flex-wrap justify-center md:justify-end gap-3 w-full md:w-auto">
           <LoginButton />
           <button
             onClick={handleGenerateReport}
@@ -631,6 +631,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectPatient }) =>
             <p className="text-3xl font-serif font-bold text-text-main mt-1">
               {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(financialStats.incomeMonth)}
             </p>
+            <div className="flex items-center gap-1 mt-2 text-sm font-medium">
+              <span className="text-text-muted">Lucro Líquido:</span>
+              <span className={`${financialStats.balanceMonth >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(financialStats.balanceMonth)}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -876,7 +882,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectPatient }) =>
 
         {/* Recent Transactions Mini Table */}
         <div className="border-t border-[#f3f2f1]">
-          <table className="w-full text-left">
+          {/* Desktop Table */}
+          <table className="w-full text-left hidden md:table">
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-xs font-bold text-text-muted uppercase">Descrição</th>
@@ -902,6 +909,25 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectPatient }) =>
               )}
             </tbody>
           </table>
+
+          {/* Mobile Card List */}
+          <div className="md:hidden divide-y divide-[#f3f2f1]">
+            {financialStats.recentTransactions.length === 0 ? (
+              <div className="p-6 text-sm text-text-muted text-center">Nenhuma transação recente.</div>
+            ) : (
+              financialStats.recentTransactions.map((item: any) => (
+                <div key={item.id} className="p-4 flex flex-col gap-1">
+                  <div className="flex justify-between items-start">
+                    <span className="text-sm font-bold text-text-main">{item.desc}</span>
+                    <span className={`text-sm font-bold ${item.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
+                      {item.type === 'income' ? '+' : '-'} {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.val)}
+                    </span>
+                  </div>
+                  <span className="text-xs text-text-muted bg-gray-100 px-2 py-0.5 rounded self-start">{item.cat}</span>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
 
@@ -953,7 +979,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectPatient }) =>
             <div className="bg-red-50 px-6 py-2 text-xs font-bold text-red-700 uppercase tracking-wide border-b border-red-100">
               Itens Precisando de Reposição
             </div>
-            <table className="w-full text-left">
+            {/* Desktop Table */}
+            <table className="w-full text-left hidden md:table">
               <tbody className="divide-y divide-[#f3f2f1]">
                 {inventoryStats.lowStockItems.map((item: any) => (
                   <tr key={item.id} className="hover:bg-red-50/50 transition-colors">
@@ -965,6 +992,19 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectPatient }) =>
                 ))}
               </tbody>
             </table>
+
+            {/* Mobile Card List */}
+            <div className="md:hidden divide-y divide-[#f3f2f1]">
+              {inventoryStats.lowStockItems.map((item: any) => (
+                <div key={item.id} className="p-4 flex justify-between items-center bg-white hover:bg-red-50/50 transition-colors">
+                  <span className="text-sm font-medium text-text-main">{item.name}</span>
+                  <div className="text-right">
+                    <div className="text-xs font-bold text-red-600">{item.stock} {item.unit}</div>
+                    <div className="text-[10px] text-text-muted">Mín: {item.min_stock}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

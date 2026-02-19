@@ -159,7 +159,7 @@ const Agenda: React.FC = () => {
   return (
     <div className="flex flex-col h-full bg-white animate-fade-in">
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-[#e3e0de]">
+      <div className="flex flex-col md:flex-row md:items-center justify-between px-4 md:px-6 py-4 border-b border-[#e3e0de] gap-4">
         <div className="flex items-center gap-6">
           <div className="flex items-center gap-3">
             <button
@@ -186,7 +186,7 @@ const Agenda: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="hidden md:flex bg-gray-100 p-1 rounded-lg">
+          <div className="flex bg-gray-100 p-1 rounded-lg self-start md:self-auto">
             <button
               onClick={() => setViewMode('day')}
               className={`px-3 py-1 text-xs font-medium rounded transition-all ${viewMode === 'day' ? 'bg-white shadow-sm text-gray-900 font-bold' : 'text-gray-600 hover:bg-white/50'}`}
@@ -217,7 +217,7 @@ const Agenda: React.FC = () => {
       </div>
 
       {/* Content Area */}
-      <div className="flex-1 overflow-y-auto relative flex flex-col">
+      <div className="flex-1 overflow-y-auto overflow-x-auto relative flex flex-col">
 
         {/* Header Row (Days of Week) */}
         <div className={`flex border-b border-[#e3e0de] sticky top-0 bg-white z-20`}>
@@ -247,7 +247,7 @@ const Agenda: React.FC = () => {
         {/* Body */}
         {viewMode === 'month' ? (
           /* Month View Grid */
-          <div className="flex-1 grid grid-cols-7 auto-rows-fr min-h-[600px] bg-gray-50">
+          <div className="flex-1 grid grid-cols-7 auto-rows-fr min-h-[600px] bg-gray-50 min-w-[700px] md:min-w-0">
             {visibleDays.map((date, index) => {
               const isCurrentMonth = date.getMonth() === currentDate.getMonth();
               const dayEvents = events.filter(e =>
@@ -307,7 +307,7 @@ const Agenda: React.FC = () => {
             </div>
 
             {/* Grid Body */}
-            <div className={`flex-1 grid relative ${viewMode === 'day' ? 'grid-cols-1' : 'grid-cols-7'}`}>
+            <div className={`flex-1 grid relative ${viewMode === 'day' ? 'grid-cols-1' : 'grid-cols-7 min-w-[700px] md:min-w-0'}`}>
               {/* Background Grid Lines */}
               {hours.map((_, i) => (
                 <div key={i} className="absolute w-full border-b border-[#e3e0de]" style={{ top: `${i * 64}px` }}></div>

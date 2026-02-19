@@ -166,7 +166,8 @@ const PatientAppointments: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="overflow-x-auto">
+                    {/* Desktop Table View */}
+                    <div className="hidden md:block overflow-x-auto">
                         <table className="w-full text-left border-collapse">
                             <thead className="bg-[#fcfbf9] border-b border-[#eceae8]">
                                 <tr>
@@ -210,12 +211,46 @@ const PatientAppointments: React.FC = () => {
                                 ))}
                             </tbody>
                         </table>
-                        {appointments.length === 0 && (
-                            <div className="p-8 text-center text-text-muted text-sm">
-                                Nenhuma consulta encontrada.
-                            </div>
-                        )}
                     </div>
+
+                    {/* Mobile Card View */}
+                    <div className="md:hidden flex flex-col gap-4 p-4 bg-gray-50/50">
+                        {appointments.map((apt) => (
+                            <div key={apt.id} className="bg-white p-5 rounded-xl border border-[#eceae8] shadow-sm flex flex-col gap-4">
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <span className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-1 block">{formatDate(new Date(apt.date))}</span>
+                                        <h4 className="font-bold text-lg text-text-main leading-tight">{apt.title}</h4>
+                                    </div>
+                                    <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-green-50 text-green-600 border border-green-100">
+                                        <span className="material-symbols-outlined text-lg">check</span>
+                                    </span>
+                                </div>
+
+                                <div className="flex items-center gap-3 py-3 border-t border-b border-gray-50">
+                                    <div className="w-10 h-10 rounded-full bg-gray-100 bg-cover bg-center border border-gray-200" style={{ backgroundImage: "url('https://cdn.pixabay.com/photo/2015/10/05/22/37/blank-profile-picture-973460_1280.png')" }}></div>
+                                    <div>
+                                        <p className="text-[10px] font-bold uppercase text-text-muted">Profissional</p>
+                                        <p className="text-sm font-medium text-text-main">{apt.doctor || 'Dra. Gabriela Mari'}</p>
+                                    </div>
+                                </div>
+
+                                <button
+                                    onClick={() => handleShowSummary(apt)}
+                                    className="w-full py-2.5 rounded-lg border border-[#eceae8] text-primary text-sm font-bold hover:bg-primary/5 transition-colors flex items-center justify-center gap-2"
+                                >
+                                    <span className="material-symbols-outlined text-lg">visibility</span>
+                                    Ver Resumo
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+
+                    {appointments.length === 0 && (
+                        <div className="p-8 text-center text-text-muted text-sm">
+                            Nenhuma consulta encontrada.
+                        </div>
+                    )}
                 </section>
             </div>
 

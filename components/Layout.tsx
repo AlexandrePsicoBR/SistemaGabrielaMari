@@ -49,7 +49,9 @@ const Layout: React.FC<LayoutProps> = ({
             <main className="flex-1 flex flex-col h-full relative overflow-hidden print:h-auto print:overflow-visible print:block">
                 <MobileHeader onMenuClick={() => setIsMobileMenuOpen(true)} />
 
-                <div className="flex-1 overflow-y-auto w-full print:h-auto print:overflow-visible print:block">
+                <div
+                    className="flex-1 overflow-y-auto w-full print:h-auto print:overflow-visible print:block"
+                >
                     {children}
                 </div>
             </main>

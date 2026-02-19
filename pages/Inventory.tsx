@@ -183,7 +183,8 @@ const Inventory: React.FC = () => {
       {/* Table */}
       <div className="bg-white border border-[#e3e0de] rounded-xl shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-left">
+          {/* Desktop Table */}
+          <table className="w-full text-left hidden md:table">
             <thead className="bg-gray-50 border-b border-[#e3e0de]">
               <tr>
                 <th className="py-4 px-6 text-xs font-bold text-text-muted uppercase tracking-wider">Produto</th>
@@ -255,6 +256,60 @@ const Inventory: React.FC = () => {
               )}
             </tbody>
           </table>
+
+          {/* Mobile Card View */}
+          <div className="md:hidden divide-y divide-[#e3e0de]">
+            {loading ? (
+              <div className="py-8 text-center text-text-muted">Carregando estoque...</div>
+            ) : filteredItems.length === 0 ? (
+              <div className="py-8 text-center text-text-muted">Nenhum item encontrado.</div>
+            ) : (
+              filteredItems.map((item) => (
+                <div key={item.id} className="p-4 flex gap-4">
+                  <div className="h-10 w-10 rounded-lg bg-gray-100 flex items-center justify-center text-text-muted shrink-0">
+                    <span className="material-symbols-outlined text-[20px]">
+                      {item.category === 'Injetáveis' ? 'vaccines' : item.category === 'Consumíveis' ? 'sanitizer' : 'inventory_2'}
+                    </span>
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="text-sm font-bold text-text-main">{item.name}</p>
+                        <span className={`inline-block px-2 py-0.5 rounded-md text-[10px] font-medium mt-1 ${item.category === 'Injetáveis' ? 'bg-purple-50 text-purple-700' :
+                          item.category === 'Consumíveis' ? 'bg-orange-50 text-orange-700' :
+                            'bg-gray-100 text-gray-700'
+                          }`}>
+                          {item.category}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => handleEdit(item)} className="p-1.5 text-text-muted hover:text-primary transition-colors">
+                          <span className="material-symbols-outlined text-[18px]">edit</span>
+                        </button>
+                        <button onClick={() => handleDelete(item.id)} className="p-1.5 text-text-muted hover:text-red-600 transition-colors">
+                          <span className="material-symbols-outlined text-[18px]">delete</span>
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex justify-between items-end mt-3">
+                      <div className="flex items-center gap-2">
+                        {item.stock <= item.minStock && (
+                          <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse"></span>
+                        )}
+                        <span className={`text-sm font-bold ${item.stock <= item.minStock ? 'text-red-600' : 'text-text-main'}`}>
+                          {item.stock} {item.unit}
+                        </span>
+                        {item.stock <= item.minStock && (
+                          <span className="text-xs text-text-muted">(Baixo)</span>
+                        )}
+                      </div>
+                      <p className="text-xs text-text-muted">Últ.: {formatDate(new Date(item.lastRestock))}</p>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
 

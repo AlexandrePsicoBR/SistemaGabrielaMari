@@ -300,7 +300,8 @@ const Financial: React.FC = () => {
           </div>
         </div>
         <div className="bg-white rounded-2xl shadow-sm border border-[#f3f2f1] overflow-hidden">
-          <table className="w-full text-left">
+          {/* Desktop Table */}
+          <table className="w-full text-left hidden md:table">
             <thead className="bg-[#fcfaf8] border-b border-[#f3f2f1]">
               <tr>
                 <th className="py-4 px-6 text-xs font-bold text-text-muted uppercase">Data</th>
@@ -383,6 +384,73 @@ const Financial: React.FC = () => {
               )}
             </tbody>
           </table>
+
+          {/* Mobile Card View */}
+          <div className="md:hidden divide-y divide-[#f3f2f1]">
+            {loading ? (
+              <div className="py-8 text-center text-text-muted">Carregando dados financeiros...</div>
+            ) : recentTransactions.length === 0 ? (
+              <div className="py-8 text-center text-text-muted">Nenhuma transação registrada.</div>
+            ) : (
+              recentTransactions.map((transaction) => (
+                <div key={transaction.id || Math.random()} className="p-4 flex flex-col gap-3">
+                  <div className="flex justify-between items-start">
+                    <div className="flex flex-col">
+                      <span className="text-sm font-bold text-text-main">{transaction.description}</span>
+                      {transaction.patientName && (
+                        <span className="text-xs text-text-muted flex items-center gap-1">
+                          <span className="material-symbols-outlined text-[10px]">person</span>
+                          {transaction.patientName}
+                        </span>
+                      )}
+                      <span className="text-xs text-text-muted">
+                        {formatDate(new Date(transaction.date + 'T12:00:00'), { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </span>
+                    </div>
+                    <span className={`text-sm font-bold ${transaction.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
+                      {transaction.type === 'income' ? '+' : '-'} {formatCurrency(transaction.value)}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center">
+                    <div className="flex gap-2">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${transaction.category === 'Procedimentos' ? 'bg-primary/10 text-[#b8702b]' :
+                        transaction.category === 'Estoque' ? 'bg-red-50 text-red-700' :
+                          'bg-gray-100 text-gray-700'
+                        }`}>
+                        {transaction.category}
+                      </span>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold border ${transaction.status === 'Pago' || transaction.status === 'Recebido'
+                        ? 'bg-green-100 text-green-700 border-green-200'
+                        : transaction.status === 'Em aberto' || transaction.status === 'Pendente'
+                          ? 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                          : transaction.status === 'Não pago'
+                            ? 'bg-gray-800 text-white border-gray-700' // Dark Gray
+                            : 'bg-gray-100 text-gray-700'
+                        }`}>
+                        {transaction.status}
+                      </span>
+                    </div>
+
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => handleEditTransaction(transaction)}
+                        className="p-1.5 text-text-muted hover:text-primary hover:bg-gray-100 rounded-full transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">edit</span>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteTransaction(transaction.id)}
+                        className="p-1.5 text-text-muted hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">delete</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
       </div>
 

@@ -233,7 +233,8 @@ const PatientDocuments: React.FC = () => {
                     </div>
 
                     {/* Documents Table Container */}
-                    <div className="bg-white rounded-2xl border border-primary/5 shadow-sm overflow-hidden">
+                    {/* Desktop Table View */}
+                    <div className="hidden md:block bg-white rounded-2xl border border-primary/5 shadow-sm overflow-hidden">
                         <div className="overflow-x-auto">
                             <table className="w-full text-left">
                                 <thead>
@@ -307,6 +308,53 @@ const PatientDocuments: React.FC = () => {
                                 </tbody>
                             </table>
                         </div>
+                    </div>
+
+                    {/* Mobile Card View */}
+                    <div className="md:hidden flex flex-col gap-4">
+                        {loading ? (
+                            <div className="p-8 text-center text-text-muted">Carregando documentos...</div>
+                        ) : documents.length === 0 ? (
+                            <div className="p-8 text-center text-text-muted">Nenhum documento encontrado.</div>
+                        ) : (
+                            documents.map((doc) => (
+                                <div key={doc.id} className="bg-white p-5 rounded-xl border border-primary/10 shadow-sm flex flex-col gap-4">
+                                    <div className="flex items-start gap-4">
+                                        <div className="w-10 h-10 rounded-lg bg-zinc-50 flex items-center justify-center text-primary/60 flex-shrink-0">
+                                            <span className="material-symbols-outlined">{getIconForType(doc.type)}</span>
+                                        </div>
+                                        <div>
+                                            <h4 className="font-bold text-text-main leading-tight">{doc.title}</h4>
+                                            <p className="text-xs text-text-muted mt-1">{formatDate(new Date(doc.created_at))}</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-between border-t border-b border-gray-50 py-3">
+                                        <span className="text-xs font-bold uppercase text-text-muted">Status</span>
+                                        {getStatusBadge(doc.status)}
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <button
+                                            onClick={() => handleViewDocument(doc)}
+                                            className="py-2.5 rounded-lg border border-[#eceae8] text-primary text-sm font-bold hover:bg-primary/5 transition-colors flex items-center justify-center gap-2"
+                                        >
+                                            <span className="material-symbols-outlined text-lg">visibility</span>
+                                            Visualizar
+                                        </button>
+                                        {doc.status === 'pending' && (
+                                            <button
+                                                onClick={() => handleSignClick(doc)}
+                                                className="bg-primary text-white py-2.5 rounded-lg text-sm font-bold hover:bg-primary-dark transition-colors shadow-sm flex items-center justify-center gap-2"
+                                            >
+                                                <span className="material-symbols-outlined text-lg">edit_document</span>
+                                                Assinar
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            ))
+                        )}
                     </div>
 
                     {/* Footer Help Card */}
