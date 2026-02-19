@@ -118,7 +118,17 @@ export const TermoBioestimulador = ({ paciente, signatureUrl, signatureDate }: T
 
             {/* ASSINATURAS */}
             <div className="flex justify-between items-end mt-16 gap-10 break-inside-avoid">
-                <div className="w-1/2 text-center">
+                <div className="w-1/2 text-center relative">
+                    {/* Visual Signature Stamp */}
+                    {signatureDate && (
+                        <div className="absolute bottom-24 left-1/2 transform -translate-x-1/2 pointer-events-none">
+                            <div className="border-2 border-[#556b2f] text-[#556b2f] rounded p-1 px-2 text-[8px] font-bold uppercase tracking-widest leading-none transform -rotate-6 opacity-80 whitespace-nowrap bg-white/50 backdrop-blur-[1px]">
+                                Assinado Digitalmente
+                                <div className="text-[6px] font-normal mt-px text-center">{dataHoje}</div>
+                                <div className="text-[6px] font-normal text-center">Dra. Gabriela Mari</div>
+                            </div>
+                        </div>
+                    )}
                     <div className="border-t border-black pt-2">
                         <p className="font-bold text-lg">Gabriela Mari</p>
                         <p className="text-xs text-gray-600">Assinatura do Profissional</p>

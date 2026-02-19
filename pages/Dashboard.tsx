@@ -219,6 +219,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectPatient }) =>
             expiration_date, 
             title, 
             patient_id,
+            tags,
             patients (name, phone)
          `)
         .order('date', { ascending: false });
@@ -243,6 +244,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectPatient }) =>
           }
 
           if (!expDateStr) return; // Still no expiration, skip
+
+          // Check if dismissed
+          if (item.tags && item.tags.includes('canceled_expiration')) return;
 
           // Filter logic (Expired OR (Upcoming <= 30 days && Future))
           if (expDateStr < todayStr) {

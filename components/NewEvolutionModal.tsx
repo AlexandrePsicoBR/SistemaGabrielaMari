@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { useCertificate } from '../contexts/CertificateContext';
+import { CertificatePasswordModal } from './CertificatePasswordModal';
 
 interface ModalProps {
   onClose: () => void;
@@ -14,6 +16,10 @@ const NewEvolutionModal: React.FC<ModalProps> = ({ onClose, onSave, initialData 
   const [technicalNote, setTechnicalNote] = useState('');
   const [services, setServices] = useState<{ id: string; name: string }[]>([]);
   const [loadingServices, setLoadingServices] = useState(true);
+
+  // Certificate integration
+  const { sign, isUnlocked } = useCertificate();
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
 
   // Inventory State
   const [inventoryItems, setInventoryItems] = useState<{ id: string; name: string; stock: number; unit: string }[]>([]);
@@ -116,23 +122,44 @@ const NewEvolutionModal: React.FC<ModalProps> = ({ onClose, onSave, initialData 
       expirationDate = d.toISOString().split('T')[0];
     }
 
-    // 3. Save Evolution
-    onSave({
+    // 3. Prepare Evolution Data
+    const evolutionData = {
       date,
       title: procedure || 'Procedimento Estético',
       patientSummary: patientNote,
       clinicalNotes: technicalNote,
-      doctor: 'Dra. Gabriela Mari', // Default for now
+      doctor: 'Dra. Gabriela Mari',
       status: 'Concluído',
-      expiration_date: expirationDate
-      // We could ideally attach the consumed items to the history record too if we had a relation table
-      // For now, request only specified "updating stock".
+      expiration_date: expirationDate,
+      items_used: consumptionList // Optional: pass consumption for record
+    };
+
+    // 4. Sign and Save
+    if (!isUnlocked) {
+      setShowPasswordModal(true);
+      return;
+    }
+
+    const dataToSign = JSON.stringify({
+      date: evolutionData.date,
+      title: evolutionData.title,
+      summary: evolutionData.patientSummary,
+      notes: evolutionData.clinicalNotes,
+      doctor: evolutionData.doctor
     });
-    // Call onClose only if it's a new insertion or if the parent handles closing after save. 
-    // Usually onSave will handle the logic. 
-    // Here we just call onSave and let the parent decide, or close immediately.
-    // For consistency with existing code:
-    onClose();
+
+    const signature = sign(dataToSign);
+
+    if (!signature) {
+      alert('Erro ao assinar evolução. Tente novamente.');
+      return;
+    }
+
+    onSave({
+      ...evolutionData,
+      signature
+    });
+
     onClose();
   };
 
@@ -314,6 +341,11 @@ const NewEvolutionModal: React.FC<ModalProps> = ({ onClose, onSave, initialData 
         </div>
 
       </div>
+      <CertificatePasswordModal
+        isOpen={showPasswordModal}
+        onClose={() => setShowPasswordModal(false)}
+        onSuccess={() => handleSave()}
+      />
     </div>
   );
 };

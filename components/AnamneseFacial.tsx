@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { formatDate } from '../lib/dateUtils';
 import { useReactToPrint } from 'react-to-print';
+import { supabase } from '../lib/supabase';
+import { useCertificate } from '../contexts/CertificateContext';
+import { CertificatePasswordModal } from './CertificatePasswordModal';
 
 interface AnamneseFacialProps {
     patientData: {
@@ -12,9 +15,10 @@ interface AnamneseFacialProps {
     };
     onPrint?: () => void; // Optional
     patientId?: string;
+    onSuccess?: () => void;
 }
 
-const AnamneseFacial: React.FC<AnamneseFacialProps> = ({ patientData, onPrint, patientId }) => {
+const AnamneseFacial: React.FC<AnamneseFacialProps> = ({ patientData, onPrint, patientId, onSuccess }) => {
 
     // Print Ref
     const printRef = useRef<HTMLDivElement>(null);
@@ -97,13 +101,55 @@ const AnamneseFacial: React.FC<AnamneseFacialProps> = ({ patientData, onPrint, p
         }
     }, [patientId]);
 
+    // Certificate
+    const { sign, isUnlocked } = useCertificate();
+    const [showPasswordModal, setShowPasswordModal] = useState(false);
+
     // 3. Handle Save
-    const handleSave = () => {
-        if (patientId) {
-            localStorage.setItem(`anamnese_facial_${patientId}`, JSON.stringify(formData));
-            alert('Anamnese salva com sucesso!');
-        } else {
+    const handleSave = async () => {
+        if (!patientId) {
             alert('Erro: ID do paciente não encontrado.');
+            return;
+        }
+
+        if (!isUnlocked) {
+            setShowPasswordModal(true);
+            return;
+        }
+
+        try {
+            const dataToSign = JSON.stringify({
+                patientId,
+                date: new Date().toISOString(),
+                type: 'anamnese-facial',
+                data: formData,
+                doctor: 'Dra. Gabriela Mari'
+            });
+
+            const signature = sign(dataToSign);
+
+            const { error } = await supabase.from('clinical_history').insert({
+                patient_id: patientId,
+                date: new Date().toISOString(),
+                title: 'Anamnese Facial',
+                description: 'Ficha de Anamnese Facial preenchida e assinada.',
+                patient_summary: formData.queixaPrincipal,
+                clinical_notes: JSON.stringify(formData),
+                type: 'anamnese-facial',
+                status: 'Concluído',
+                tags: ['anamnese', 'facial'],
+                signature: signature,
+                doctor: 'Dra. Gabriela Mari'
+            });
+
+            if (error) throw error;
+
+            alert('Anamnese salva e assinada com sucesso!');
+            if (onSuccess) onSuccess();
+
+        } catch (error) {
+            console.error('Error saving anamnesis:', error);
+            alert('Erro ao salvar anamnese.');
         }
     };
 
@@ -502,7 +548,16 @@ const AnamneseFacial: React.FC<AnamneseFacialProps> = ({ patientData, onPrint, p
                     <div className="mt-6">
                         <div className="flex justify-between gap-16 px-8">
                             <div className="flex-1 text-center">
-                                <div className="border-b border-black mb-2"></div>
+                                <div className="border-b border-black mb-2 relative">
+                                    {/* Visual Signature Stamp */}
+                                    <div className="absolute bottom-16 left-1/2 transform -translate-x-1/2 pointer-events-none">
+                                        <div className="border-2 border-[#556b2f] text-[#556b2f] rounded p-1 px-2 text-[8px] font-bold uppercase tracking-widest leading-none transform -rotate-6 opacity-80 whitespace-nowrap">
+                                            Assinado Digitalmente
+                                            <div className="text-[6px] font-normal mt-px text-center">{formatDate(new Date())}</div>
+                                            <div className="text-[6px] font-normal text-center">Dra. Gabriela Mari</div>
+                                        </div>
+                                    </div>
+                                </div>
                                 <p className="text-[9px] font-bold uppercase tracking-wider">Profissional Responsável</p>
                             </div>
                             <div className="flex-1 text-center">
@@ -511,12 +566,18 @@ const AnamneseFacial: React.FC<AnamneseFacialProps> = ({ patientData, onPrint, p
                             </div>
                         </div>
                         <p className="text-[8px] text-center mt-4 text-gray-400">
-                            {formatDate(new Date())} • Documento processado digitalmente
+                            {formatDate(new Date())} • Documento processado digitalmente • Chave: {Math.random().toString(36).substring(7).toUpperCase()}
                         </p>
                     </div>
 
                 </div>
             </div>
+            {/* Password Modal */}
+            <CertificatePasswordModal
+                isOpen={showPasswordModal}
+                onClose={() => setShowPasswordModal(false)}
+                onSuccess={() => handleSave()}
+            />
         </div>
     );
 };

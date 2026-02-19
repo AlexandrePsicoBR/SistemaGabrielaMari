@@ -7,9 +7,13 @@ if (!rootElement) {
   throw new Error("Could not find root element to mount to");
 }
 
+import { CertificateProvider } from './contexts/CertificateContext';
+
 const root = ReactDOM.createRoot(rootElement);
 root.render(
   <React.StrictMode>
-    <App />
+    <CertificateProvider>
+      <App />
+    </CertificateProvider>
   </React.StrictMode>
 );

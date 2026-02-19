@@ -187,7 +187,25 @@ const TermoLifting: React.FC<TermoLiftingProps> = ({ paciente, signatureUrl, sig
                             />
                         )}
                         <p className="border-b border-black mb-1 mt-12"></p>
-                        <p className="text-xs">Assinatura</p>
+                        <p className="text-xs">Assinatura do Paciente</p>
+                    </div>
+
+                    <div className="w-1/2 text-center relative">
+                        {/* Visual Signature Stamp */}
+                        {signatureDate && (
+                            <div className="absolute bottom-24 left-1/2 transform -translate-x-1/2 pointer-events-none">
+                                <div className="border-2 border-[#556b2f] text-[#556b2f] rounded p-1 px-2 text-[8px] font-bold uppercase tracking-widest leading-none transform -rotate-6 opacity-80 whitespace-nowrap bg-white/50 backdrop-blur-[1px]">
+                                    Assinado Digitalmente
+                                    <div className="text-[6px] font-normal mt-px text-center">{dataHoje}</div>
+                                    <div className="text-[6px] font-normal text-center">Dra. Gabriela Mari</div>
+                                </div>
+                            </div>
+                        )}
+                        <div className="border-t border-black pt-2">
+                            <p className="font-bold">Gabriela Mari</p>
+                            <p className="text-sm">COREN 212775</p>
+                            <p className="text-xs text-gray-600 mt-1">Profissional</p>
+                        </div>
                     </div>
                 </div>
 

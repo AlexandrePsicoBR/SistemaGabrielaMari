@@ -84,21 +84,42 @@ const TermoHidrolipo: React.FC<TermoHidrolipoProps> = ({ paciente, substancias, 
             </div>
 
             {/* ASSINATURA */}
-            <div className="mt-16 break-inside-avoid w-2/3 mx-auto text-center relative">
-                {signatureUrl && (
-                    <img
-                        src={signatureUrl}
-                        alt="Assinatura"
-                        className="absolute bottom-16 left-1/2 transform -translate-x-1/2 max-h-16 mix-blend-multiply"
-                    />
-                )}
-                <div className="mb-8 text-left">
-                    <p className="font-bold uppercase text-xs mb-1">Nome Legível:</p>
-                    <p className="uppercase border-b border-dotted border-gray-400 pb-1 w-full">{paciente.nome}</p>
+            <div className="mt-16 flex justify-between items-end gap-10 break-inside-avoid">
+                {/* Assinatura Profissional */}
+                <div className="w-1/2 text-center relative">
+                    {/* Visual Signature Stamp */}
+                    {signatureDate && (
+                        <div className="absolute bottom-24 left-1/2 transform -translate-x-1/2 pointer-events-none">
+                            <div className="border-2 border-[#556b2f] text-[#556b2f] rounded p-1 px-2 text-[8px] font-bold uppercase tracking-widest leading-none transform -rotate-6 opacity-80 whitespace-nowrap bg-white/50 backdrop-blur-[1px]">
+                                Assinado Digitalmente
+                                <div className="text-[6px] font-normal mt-px text-center">{dataHoje}</div>
+                                <div className="text-[6px] font-normal text-center">Dra. Gabriela Mari</div>
+                            </div>
+                        </div>
+                    )}
+                    <div className="border-t border-black pt-2">
+                        <p className="font-bold">Gabriela Mari</p>
+                        <p className="text-sm">COREN 212775</p>
+                        <p className="text-xs text-gray-600 mt-1">Profissional</p>
+                    </div>
                 </div>
 
-                <div className="border-t border-black pt-2">
-                    <p className="font-bold">Assinatura do Cliente</p>
+                <div className="w-1/2 break-inside-avoid text-center relative">
+                    {signatureUrl && (
+                        <img
+                            src={signatureUrl}
+                            alt="Assinatura"
+                            className="absolute bottom-16 left-1/2 transform -translate-x-1/2 max-h-16 mix-blend-multiply"
+                        />
+                    )}
+                    <div className="mb-8 text-left">
+                        <p className="font-bold uppercase text-xs mb-1">Nome Legível:</p>
+                        <p className="uppercase border-b border-dotted border-gray-400 pb-1 w-full">{paciente.nome}</p>
+                    </div>
+
+                    <div className="border-t border-black pt-2">
+                        <p className="font-bold">Assinatura do Cliente</p>
+                    </div>
                 </div>
             </div>
 

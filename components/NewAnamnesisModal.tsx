@@ -101,7 +101,7 @@ const NewAnamnesisModal: React.FC<ModalProps> = ({ onClose, type, patientData, p
             </div>
             <div className="flex-1 overflow-y-auto">
               <div ref={componentRef}>
-                <AnamneseFacial patientData={patientData} onPrint={handleDownloadPDF} patientId={patientId} />
+                <AnamneseFacial patientData={patientData} onPrint={handleDownloadPDF} patientId={patientId} onSuccess={onClose} />
               </div>
             </div>
           </>
@@ -117,7 +117,7 @@ const NewAnamnesisModal: React.FC<ModalProps> = ({ onClose, type, patientData, p
             </div>
             <div className="flex-1 overflow-y-auto">
               <div ref={componentRef}>
-                <AnamneseCorporal patientData={patientData} onPrint={handleDownloadPDF} patientId={patientId} />
+                <AnamneseCorporal patientData={patientData} onPrint={handleDownloadPDF} patientId={patientId} onSuccess={onClose} />
               </div>
             </div>
           </>

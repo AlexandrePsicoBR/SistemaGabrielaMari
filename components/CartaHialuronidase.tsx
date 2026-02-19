@@ -11,9 +11,11 @@ interface CartaProps {
         rg?: string;
         alergias?: string | string[];
     };
+    signatureUrl?: string | null;
+    signatureDate?: string;
 }
 
-const CartaHialuronidase: React.FC<CartaProps> = ({ paciente }) => {
+const CartaHialuronidase: React.FC<CartaProps> = ({ paciente, signatureUrl, signatureDate }) => {
     // Data de hoje (ex: 27/01/2026)
     const dataHoje = formatDate(new Date());
 
@@ -92,7 +94,17 @@ const CartaHialuronidase: React.FC<CartaProps> = ({ paciente }) => {
                 </div>
 
                 {/* Profissional */}
-                <div>
+                <div className="relative">
+                    {/* Visual Signature Stamp */}
+                    {signatureDate && (
+                        <div className="absolute bottom-24 left-0 pointer-events-none">
+                            <div className="border-2 border-[#556b2f] text-[#556b2f] rounded p-1 px-2 text-[8px] font-bold uppercase tracking-widest leading-none transform -rotate-6 opacity-80 whitespace-nowrap bg-white/50 backdrop-blur-[1px]">
+                                Assinado Digitalmente
+                                <div className="text-[6px] font-normal mt-px text-center">{dataHoje}</div>
+                                <div className="text-[6px] font-normal text-center">Dra. Gabriela Mari</div>
+                            </div>
+                        </div>
+                    )}
                     <div className="border-b border-black inline-block min-w-[300px] pb-1 font-bold">
                         Gabriela Mari - COREN 212775
                     </div>

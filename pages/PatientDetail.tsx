@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { formatDate, formatTime } from '../lib/dateUtils';
 import { supabase } from '../lib/supabase';
+import { useCertificate } from '../contexts/CertificateContext';
+import { CertificatePasswordModal } from '../components/CertificatePasswordModal';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import NewEvolutionModal from '../components/NewEvolutionModal';
@@ -43,6 +45,7 @@ interface HistoryEvent {
   timelineColor?: string;
   isoDate?: string;
   expirationDate?: string;
+  signature?: string;
 }
 
 
@@ -53,6 +56,11 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
   const [historyData, setHistoryData] = useState<HistoryEvent[]>([]);
   const [selectedEvolution, setSelectedEvolution] = useState<any>(null); // For editing
   const [sendingRequest, setSendingRequest] = useState<string | null>(null);
+
+  // Certificate integration
+  const { sign, isUnlocked } = useCertificate();
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [pendingSignatureAction, setPendingSignatureAction] = useState<(() => Promise<void>) | null>(null);
 
   // Update state when patientId changes
   const getSignedUrlHelper = async (pathOrUrl: string) => {
@@ -156,6 +164,7 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
             iconBg: 'bg-primary/10',
             status: h.status || 'Concluído',
             statusColor: 'bg-green-100 text-green-700 border-green-200',
+            signature: h.signature, // Added signature field
             description: h.description,
             patientSummary: h.patient_summary,
             clinicalNotes: h.clinical_notes,
@@ -730,8 +739,8 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
       return [
         event.date,
         event.title,
-        event.doctor,
-        details,
+        event.signature ? `${event.doctor}\n(Assinado Digitalmente)` : event.doctor,
+        details + (event.signature ? `\n\nAssinatura Digital:\n${event.signature}` : ''),
         event.status
       ];
     });
@@ -742,7 +751,7 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
       body: historyTableData,
       theme: 'grid',
       headStyles: { fillColor: primaryColor, textColor: 255, fontSize: 10 },
-      styles: { fontSize: 8, cellPadding: 2 },
+      styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
       columnStyles: {
         3: { cellWidth: 80 } // Wider column for details
       }
@@ -799,9 +808,10 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
 
     currentY = (doc as any).lastAutoTable.finalY + 15;
 
-    // --- 4. Documentos Assinados ---
-    const signedDocs = patientDocuments.filter(d => d.status === 'signed');
-    if (signedDocs.length > 0) {
+    // --- 4. Documentos ---
+    // Only filter out deleted if implemented, for now show all valid docs
+    const allDocs = patientDocuments.filter(d => true);
+    if (allDocs.length > 0) {
       if (currentY > 250) {
         doc.addPage();
         currentY = 20;
@@ -809,22 +819,26 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
 
       doc.setFontSize(14);
       doc.setTextColor(40, 40, 40);
-      doc.text("Documentos Assinados", 14, currentY);
+      doc.text("Documentos", 14, currentY);
       currentY += 5;
 
-      const docsTableData = signedDocs.map(d => [
+      const docsTableData = allDocs.map(d => [
         d.title || d.type.charAt(0).toUpperCase() + d.type.slice(1).replace('-', ' '),
-        'Assinado',
-        d.signed_at ? formatDate(new Date(d.signed_at)) : formatDate(new Date())
+        d.status === 'signed' ? 'Assinado' : 'Pendente',
+        d.signed_at ? formatDate(new Date(d.signed_at)) : '-',
+        d.admin_signature ? `Assinatura Digital:\n${d.admin_signature}` : '-'
       ]);
 
       autoTable(doc, {
         startY: currentY,
-        head: [['Documento', 'Status', 'Data (Ref)']],
+        head: [['Documento', 'Status', 'Data (Ref)', 'Assinatura']],
         body: docsTableData,
         theme: 'striped',
         headStyles: { fillColor: [100, 100, 150], textColor: 255 },
-        styles: { fontSize: 9 },
+        styles: { fontSize: 8, overflow: 'linebreak' },
+        columnStyles: {
+          3: { cellWidth: 80 } // Wider column for signature
+        }
       });
     }
 
@@ -840,71 +854,73 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
     doc.save(`Prontuario_Completo_${patientData.name.replace(/\s+/g, '_')}.pdf`);
   };
 
-  const handleMarkAsSigned = async (docType: string) => {
+  const handleMarkAsSigned = async (docType: string, onSuccess?: (doc?: any) => void) => {
     try {
       if (!currentPatient?.id) return;
 
-      // 1. Check if document exists
-      const existingDoc = patientDocuments.find(d => d.type === docType);
-      let docResult;
-
-      if (existingDoc) {
-        // Update existing
-        const { data, error } = await supabase
-          .from('patient_documents')
-          .update({
-            status: 'signed',
-            signed_at: new Date().toISOString()
-          })
-          .eq('id', existingDoc.id)
-          .select()
-          .single();
-
-        if (error) throw error;
-        docResult = data;
-      } else {
-        // Insert new
-        const { data, error } = await supabase
-          .from('patient_documents')
-          .insert({
-            patient_id: currentPatient.id,
-            type: docType,
-            title: `Termo de ${docType.charAt(0).toUpperCase() + docType.slice(1)}`, // Simple title generation
-            status: 'signed',
-            signed_at: new Date().toISOString()
-          })
-          .select()
-          .single();
-
-        if (error) throw error;
-        docResult = data;
+      // Certificate Check
+      if (!isUnlocked) {
+        setPendingSignatureAction(() => async () => await handleMarkAsSigned(docType, onSuccess));
+        setShowPasswordModal(true);
+        return;
       }
 
-      // 2. Log in clinical_history (timeline)
+      // Generate signature - Logic from NewEvolutionModal
+      const dataToSign = JSON.stringify({
+        date: new Date().toISOString(),
+        title: `Termo de ${docType}`,
+        patientId: currentPatient.id,
+        doctor: 'Dra. Gabriela Mari',
+        type: docType
+      });
+
+      const signature = sign(dataToSign);
+
+      if (!signature) {
+        alert('Erro ao assinar documento (signature is null). Tente novamente.');
+        return;
+      }
+
+      // alert(`[DEBUG] Signed successfully. Hash length: ${signature.length}`);
+
+      // Always INSERT new document to preserve history of every generation
+      const { data: docResult, error } = await supabase
+        .from('patient_documents')
+        .insert({
+          patient_id: currentPatient.id,
+          type: docType,
+          title: `Termo de ${docType.charAt(0).toUpperCase() + docType.slice(1)}`,
+          status: 'signed',
+          signed_at: new Date().toISOString(),
+          admin_signature: signature
+        })
+        .select()
+        .single();
+
+
+
+      // Always INSERT new document to preserve history of every generation
       const { data: historyEntry, error: historyError } = await supabase
         .from('clinical_history')
         .insert({
           patient_id: currentPatient.id,
           date: new Date().toISOString().split('T')[0], // Today YYYY-MM-DD
           title: `Documento Assinado: ${docType.charAt(0).toUpperCase() + docType.slice(1)}`,
-          doctor: 'Sistema', // Or logged in user if available
-          description: `Documento de ${docType} impresso e assinado.`,
+          doctor: 'Dra. Gabriela Mari',
+          description: `Documento de ${docType} gerado e assinado.`,
           patient_summary: `Assinou termo de ${docType}.`,
           type: 'document',
           status: 'Concluído',
-          tags: ['documento']
+          tags: ['documento'],
+          signature: signature
         })
         .select()
         .single();
 
       if (historyError) throw historyError;
 
-      // Update local state for badge
-      if (existingDoc) {
-        setPatientDocuments(prev => prev.map(d => d.type === docType ? docResult : d));
-      } else {
-        setPatientDocuments(prev => [...prev, docResult]);
-      }
+      // Update local state
+      setPatientDocuments(prev => [docResult, ...prev]); // Prepend new doc
 
       // Update local history timeline
       const newEvent: HistoryEvent = {
@@ -920,20 +936,39 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
         iconBg: 'bg-purple-100',
         status: historyEntry.status,
         statusColor: 'bg-green-100 text-green-700 border-green-200',
-        description: historyEntry.description
+        description: historyEntry.description,
+        signature: signature
       };
       setHistoryData([newEvent, ...historyData]);
 
+      // Update viewing state to show the new signature immediately
+      setViewingSignedDoc(docResult);
+
+      // Trigger success callback (e.g., print or just open modal)
+      if (onSuccess) {
+        onSuccess(docResult);
+      }
+
     } catch (error) {
       console.error('Error marking document as signed:', error);
+      alert('Erro ao assinar documento.');
     }
   };
 
-  const handlePrintDocument = () => {
+  const handleGenerateAndOpen = async (input: string | any) => {
+    const docType = typeof input === 'string' ? input : input.type;
+    // 1. Sign and Create Document IMMEDIATELY
+    await handleMarkAsSigned(docType, (newDoc) => {
+      if (newDoc) {
+        setSelectedDocument(newDoc.type); // Or pass object if needed? logic uses string usually
+        setViewingSignedDoc(newDoc); // Show THIS document
+        setShowDocumentModal(true);
+      }
+    });
+  };
+
+  const handlePrintDocument = async () => {
     window.print();
-    if (selectedDocument) {
-      handleMarkAsSigned(selectedDocument);
-    }
   };
 
   const handleSaveEvolution = async (data: any) => {
@@ -950,6 +985,7 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
             description: data.title,
             patient_summary: data.patientSummary,
             clinical_notes: data.clinicalNotes,
+            signature: data.signature
           })
           .eq('id', selectedEvolution.id);
 
@@ -963,7 +999,8 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
           title: data.title,
           patientSummary: data.patientSummary,
           clinicalNotes: data.clinicalNotes,
-          description: data.patientSummary || data.title
+          description: data.patientSummary || data.title,
+          signature: data.signature
         } : h));
 
         setSelectedEvolution(null);
@@ -982,7 +1019,9 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
             clinical_notes: data.clinicalNotes,
             type: 'procedure', // default
             status: data.status,
-            tags: [] // if any
+            tags: [],
+            signature: data.signature,
+            expiration_date: data.expiration_date
           })
           .select()
           .single();
@@ -1002,7 +1041,8 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
           iconBg: 'bg-primary/10',
           status: inserted.status,
           statusColor: 'bg-green-100 text-green-700 border-green-200',
-          description: inserted.patient_summary || inserted.description
+          description: inserted.patient_summary || inserted.description,
+          signature: inserted.signature
         };
 
         // Update local state and history data
@@ -1394,6 +1434,7 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                     >
                       <span className="material-symbols-outlined text-[18px]">edit</span>
                     </button>
+
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -1407,6 +1448,16 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                   </div>
                 )}
               </div>
+
+              {/* Visual Signature Badge for History Item */}
+              {event.signature && (
+                <div className="px-6 py-2 bg-green-50/50 border-b border-green-100 flex items-center gap-2">
+                  <span className="material-symbols-outlined text-green-600 text-[16px]">verified</span>
+                  <span className="text-xs font-bold text-green-700 uppercase tracking-wide">Assinado Digitalmente por Dra. Gabriela Mari</span>
+                </div>
+              )}
+
+
 
               {/* Sections */}
               <div className="p-6 pt-4 space-y-6">
@@ -1846,7 +1897,8 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                   const doc = getDocStatus('botox');
                   if (doc?.status === 'signed') {
                     if (confirm('Deseja gerar uma nova via deste documento para assinatura?')) {
-                      handleReissueDocument('botox', 'Termo de Consentimento - Botox');
+                      // handleReissueDocument('botox', 'Termo de Consentimento - Botox');
+                      handleGenerateAndOpen('botox');
                     }
                   } else {
                     if (!doc) {
@@ -1905,7 +1957,8 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                   const doc = getDocStatus('bioestimulador');
                   if (doc?.status === 'signed') {
                     if (confirm('Deseja gerar uma nova via deste documento para assinatura?')) {
-                      handleReissueDocument('bioestimulador', 'Termo de Consentimento - Bioestimulador');
+                      // handleReissueDocument('bioestimulador', 'Termo de Consentimento - Bioestimulador');
+                      handleGenerateAndOpen('bioestimulador');
                     }
                   } else {
                     if (!doc) {
@@ -1964,7 +2017,8 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                   const doc = getDocStatus('fio-pdo');
                   if (doc?.status === 'signed') {
                     if (confirm('Deseja gerar uma nova via deste documento para assinatura?')) {
-                      handleReissueDocument('fio-pdo', 'Termo de Consentimento - Fios PDO');
+                      // handleReissueDocument('fio-pdo', 'Termo de Consentimento - Fios PDO');
+                      handleGenerateAndOpen('fio-pdo');
                     }
                   } else {
                     if (!doc) {
@@ -2023,7 +2077,8 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                   const doc = getDocStatus('hialuronidase');
                   if (doc?.status === 'signed') {
                     if (confirm('Deseja gerar uma nova via deste documento para assinatura?')) {
-                      handleReissueDocument('hialuronidase', 'Carta de Informação - Hialuronidase');
+                      // handleReissueDocument('hialuronidase', 'Carta de Informação - Hialuronidase');
+                      handleGenerateAndOpen('hialuronidase');
                     }
                   } else {
                     if (!doc) {
@@ -2075,7 +2130,8 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                   const doc = getDocStatus('hidrolipo');
                   if (doc?.status === 'signed') {
                     if (confirm('Deseja gerar uma nova via deste documento para assinatura?')) {
-                      handleReissueDocument('hidrolipo', 'Termo de Consentimento - Hidrolipo');
+                      // handleReissueDocument('hidrolipo', 'Termo de Consentimento - Hidrolipo');
+                      handleGenerateAndOpen('hidrolipo');
                     }
                   } else {
                     if (!doc) {
@@ -2134,7 +2190,8 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                   const doc = getDocStatus('intradermo');
                   if (doc?.status === 'signed') {
                     if (confirm('Deseja gerar uma nova via deste documento para assinatura?')) {
-                      handleReissueDocument('intradermo', 'Termo de Consentimento - Intradermoterapia');
+                      // handleReissueDocument('intradermo', 'Termo de Consentimento - Intradermoterapia');
+                      handleGenerateAndOpen('intradermo');
                     }
                   } else {
                     if (!doc) {
@@ -2193,7 +2250,8 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                   const doc = getDocStatus('lifting');
                   if (doc?.status === 'signed') {
                     if (confirm('Deseja gerar uma nova via deste documento para assinatura?')) {
-                      handleReissueDocument('lifting', 'Termo de Consentimento - Lifting Temporal');
+                      // handleReissueDocument('lifting', 'Termo de Consentimento - Lifting Temporal');
+                      handleGenerateAndOpen('lifting');
                     }
                   } else {
                     if (!doc) {
@@ -2252,7 +2310,8 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                   const doc = getDocStatus('microagulhamento');
                   if (doc?.status === 'signed') {
                     if (confirm('Deseja gerar uma nova via deste documento para assinatura?')) {
-                      handleReissueDocument('microagulhamento', 'Termo de Consentimento - Microagulhamento');
+                      // handleReissueDocument('microagulhamento', 'Termo de Consentimento - Microagulhamento');
+                      handleGenerateAndOpen('microagulhamento');
                     }
                   } else {
                     if (!doc) {
@@ -2311,7 +2370,8 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                   const doc = getDocStatus('peeling');
                   if (doc?.status === 'signed') {
                     if (confirm('Deseja gerar uma nova via deste documento para assinatura?')) {
-                      handleReissueDocument('peeling', 'TERMO DE CONSENTIMENTO - PEELING');
+                      // handleReissueDocument('peeling', 'TERMO DE CONSENTIMENTO - PEELING');
+                      handleGenerateAndOpen('peeling');
                     }
                   } else {
                     if (!doc) {
@@ -2370,7 +2430,8 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                   const doc = getDocStatus('preenchimento');
                   if (doc?.status === 'signed') {
                     if (confirm('Deseja gerar uma nova via deste documento para assinatura?')) {
-                      handleReissueDocument('preenchimento', 'Termo de Consentimento - Preenchimento Facial');
+                      // handleReissueDocument('preenchimento', 'Termo de Consentimento - Preenchimento Facial');
+                      handleGenerateAndOpen('preenchimento');
                     }
                   } else {
                     if (!doc) {
@@ -2776,6 +2837,20 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
           </div>
         </div>
       )}
+      <CertificatePasswordModal
+        isOpen={showPasswordModal}
+        onClose={() => {
+          setShowPasswordModal(false);
+          setPendingSignatureAction(null);
+        }}
+        onSuccess={() => {
+          if (pendingSignatureAction) {
+            pendingSignatureAction();
+            setPendingSignatureAction(null);
+          }
+        }}
+      />
+
     </div>
   );
 };
