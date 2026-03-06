@@ -21,7 +21,7 @@ interface AnamneseCorporalProps {
 const AnamneseCorporal: React.FC<AnamneseCorporalProps> = ({ patientData, onPrint, patientId, onSuccess }) => {
 
     const initialFormState = {
-        dataAvaliacao: new Date().toISOString().split('T')[0],
+        dataAvaliacao: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }),
         dadosPessoais: {
             indicacao: '',
             cidade: '',
@@ -136,13 +136,80 @@ const AnamneseCorporal: React.FC<AnamneseCorporalProps> = ({ patientData, onPrin
 
             const signature = sign(dataToSign);
 
+            // Formatting helper for corporal
+            const formatCorporalNotes = (data: any) => {
+                const lines = [];
+
+                if (data.motivoConsulta.queixa) lines.push(`*Motivo da Consulta:* ${data.motivoConsulta.queixa}`);
+                if (data.motivoConsulta.tratamentoPrevio.realizado) {
+                    lines.push(`*Tratamento Prévio:* Sim (${data.motivoConsulta.tratamentoPrevio.qual})`);
+                }
+
+                // História
+                const hist = [];
+                if (data.motivoConsulta.historia.data) hist.push(`Data: ${data.motivoConsulta.historia.data}`);
+                if (data.motivoConsulta.historia.local) hist.push(`Local: ${data.motivoConsulta.historia.local}`);
+                if (data.motivoConsulta.historia.resultados) hist.push(`Resultado: ${data.motivoConsulta.historia.resultados}`);
+                if (hist.length > 0) lines.push(`*Histórico Queixa:* ${hist.join(' | ')}`);
+
+                // Histórico Paciente
+                const hp = data.historicoPaciente;
+                const saude = [];
+                if (hp.medicacao.uso) saude.push(`Medicação: ${hp.medicacao.quais}`);
+                if (hp.alergias.uso) saude.push(`Alergias: ${hp.alergias.quais}`);
+                if (hp.afeccoesCutaneas.uso) saude.push(`Afecções: ${hp.afeccoesCutaneas.quais}`);
+                if (hp.pressao.hipertensao) saude.push('Hipertensão');
+                if (hp.pressao.hipotensao) saude.push('Hipotensão');
+                if (hp.cardiacos.problema) saude.push(`Cardíacos: ${hp.cardiacos.quais}`);
+                if (hp.marcapasso) saude.push('Marcapasso');
+                if (hp.epilepsia) saude.push('Epilepsia');
+                if (hp.diabetes.tem) saude.push(`Diabetes: ${hp.diabetes.tipo} (Desde: ${hp.diabetes.desde})`);
+                if (hp.tireoide?.tem) saude.push(`Tireóide: ${hp.tireoide.qual}`);
+                if (hp.disturbioCirculatorio.tem || hp.disturbioCirculatorio.trombose || hp.disturbioCirculatorio.varizes) {
+                    saude.push(`Dist. Circulatório (${hp.disturbioCirculatorio.trombose?'Trombose':''} ${hp.disturbioCirculatorio.varizes?'Varizes':''})`.trim());
+                }
+                if (hp.oncologicos?.tem) saude.push(`Oncológicos: ${hp.oncologicos.quais}`);
+                if (hp.cirurgicos?.tem) saude.push(`Cirúrgicos: ${hp.cirurgicos.quais}`);
+                if (hp.metais.tem) saude.push(`Metais: ${hp.metais.regiao}`);
+                
+                if (saude.length > 0) lines.push(`\n*Histórico de Saúde:* ${saude.join(' | ')}`);
+
+                // Hábitos
+                const hab = [];
+                if (hp.agua.quantidade) hab.push(`Água: ${hp.agua.quantidade}`);
+                if (hp.frituras) hab.push(`Frituras: ${hp.frituras}`);
+                if (hp.refrigerantesDoces) hab.push(`Doces: ${hp.refrigerantesDoces}`);
+                if (hp.intestino) hab.push(`Intestino: ${hp.intestino}`);
+                if (hab.length > 0) lines.push(`*Hábitos:* ${hab.join(' | ')}`);
+
+                // Alimentos
+                const alimentos = Object.keys(hp.alimentacao).filter(k => hp.alimentacao[k]).map(k => k.replace(/([A-Z])/g, ' $1').trim());
+                if (alimentos.length > 0) lines.push(`*Alimentação:* ${alimentos.join(', ')}`);
+
+                // Medidas
+                const med = data.medidas;
+                const medidasStr = [];
+                if (med.peso) medidasStr.push(`Peso: ${med.peso}kg`);
+                if (med.altura) medidasStr.push(`Altura: ${med.altura}m`);
+                if (med.imc) medidasStr.push(`IMC: ${med.imc}`);
+                if (medidasStr.length > 0) lines.push(`\n*Medidas:* ${medidasStr.join(' | ')}`);
+
+                if (data.composicaoCorporal) lines.push(`*Composição Corporal:* ${data.composicaoCorporal}`);
+                if (data.satisfacaoCorporal?.atual || data.satisfacaoCorporal?.desejada) {
+                    lines.push(`*Satisfação Stunkard:* Atual ${data.satisfacaoCorporal.atual} / Desejada ${data.satisfacaoCorporal.desejada}`);
+                }
+                if (data.eva !== null) lines.push(`*EVA (Nível de Satisfação):* ${data.eva}`);
+
+                return lines.join('\n');
+            };
+
             const { error } = await supabase.from('clinical_history').insert({
                 patient_id: patientId,
                 date: new Date().toISOString(),
                 title: 'Anamnese Corporal',
                 description: 'Ficha de Anamnese Corporal preenchida e assinada.',
                 patient_summary: formData.motivoConsulta.queixa,
-                clinical_notes: JSON.stringify(formData), // Storing JSON as string
+                clinical_notes: formatCorporalNotes(formData), // Storing Formatted String 
                 type: 'anamnese-corporal',
                 status: 'Concluído',
                 tags: ['anamnese', 'corporal'],

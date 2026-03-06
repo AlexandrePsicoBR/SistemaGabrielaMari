@@ -21,7 +21,7 @@ const EventDetailsModal: React.FC<EventDetailsModalProps> = ({ event, onClose, o
     const [isRescheduling, setIsRescheduling] = useState(false);
 
     // Reschedule State
-    const [newDate, setNewDate] = useState(event.start.toISOString().split('T')[0]);
+    const [newDate, setNewDate] = useState(event.start.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }));
     const [newStartTime, setNewStartTime] = useState(formatTime(event.start, { hour: '2-digit', minute: '2-digit' }));
     const [newEndTime, setNewEndTime] = useState(formatTime(event.end, { hour: '2-digit', minute: '2-digit' }));
 

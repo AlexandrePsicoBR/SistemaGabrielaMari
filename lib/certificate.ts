@@ -64,7 +64,7 @@ export function unlockCertificate(pfxBuffer: ArrayBuffer, password: string): for
 export function signData(privateKey: forge.pki.PrivateKey, data: string): string {
     const md = forge.md.sha256.create();
     md.update(data, 'utf8');
-    const signature = privateKey.sign(md);
+    const signature = (privateKey as any).sign(md);
     // Return base64 encoded signature
     return forge.util.encode64(signature);
 }

@@ -85,6 +85,16 @@ const NewPatientModal: React.FC<ModalProps> = ({ onClose, onSave, initialData })
         return;
       }
 
+      if (!formData.name.trim()) {
+        alert('O nome completo é obrigatório.');
+        return;
+      }
+
+      if (!formData.email.trim()) {
+        alert('O e-mail é obrigatório para cadastrar o acesso do paciente.');
+        return;
+      }
+
       setLoading(true);
       let avatarPath = '';
 
@@ -141,6 +151,36 @@ const NewPatientModal: React.FC<ModalProps> = ({ onClose, onSave, initialData })
       }]);
 
       if (error) throw error;
+
+      // ------------------------------------------------------------------
+      // AUTO-CREATE AUTH USER FOR THE PATIENT
+      // ------------------------------------------------------------------
+      if (!isEditing) {
+        const firstName = formData.name.trim().split(' ')[0];
+        // Password rule: FirstName + 1234
+        // Adding a slight capitalization rule or keeping as typed? 
+        // Let's keep it exact as requested: "primeiro nome da pessoa + 1234"
+        const defaultPassword = `${firstName}1234`;
+
+        const { data: authData, error: authError } = await supabase.auth.signUp({
+          email: formData.email,
+          password: defaultPassword,
+          options: {
+            data: {
+              full_name: formData.name,
+              role: 'patient', // Custom claim/metadata
+            }
+          }
+        });
+
+        if (authError) {
+          console.error('Erro ao criar usuário Auth para o paciente:', authError);
+          // O paciente foi criado no banco de dados, mas não no Auth. 
+          alert(`Paciente salvo, mas houve um erro ao criar o acesso dele (Auth): ${authError.message}`);
+        } else {
+          console.log('Usuário Auth do paciente criado com sucesso!', authData);
+        }
+      }
 
       onClose();
     } catch (error) {

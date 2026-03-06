@@ -19,7 +19,7 @@ const NewInventoryItemModal: React.FC<ModalProps> = ({ onClose, initialData }) =
     stock: 0,
     minStock: 5,
     unit: 'UN',
-    lastRestock: new Date().toISOString().split('T')[0],
+    lastRestock: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }),
   });
 
   const [cost, setCost] = useState('');

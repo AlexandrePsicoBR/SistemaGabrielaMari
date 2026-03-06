@@ -9,10 +9,21 @@ export function LoginButton() {
         try {
             setLoading(true);
 
-            // Force sign out first to ensure we get a fresh session with new tokens
-            await supabase.auth.signOut();
+            // Get current user to check for existing identities
+            const { data: { user } } = await supabase.auth.getUser();
+            
+            if (user && user.identities) {
+                // Find existing Google identities
+                const googleIdentities = user.identities.filter(identity => identity.provider === 'google');
+                
+                // Unlink existing Google identities to force a fresh connection and get new tokens
+                for (const identity of googleIdentities) {
+                    await supabase.auth.unlinkIdentity(identity);
+                }
+            }
 
-            const { error } = await supabase.auth.signInWithOAuth({
+            // Link Google Identity to the CURRENT logged-in user instead of signing out
+            const { error } = await supabase.auth.linkIdentity({
                 provider: 'google',
                 options: {
                     // Redireciona de volta para a origem (SPA)
@@ -29,9 +40,9 @@ export function LoginButton() {
                 },
             });
             if (error) throw error;
-        } catch (error) {
-            console.error('Error logging in:', error);
-            alert('Erro ao fazer login com Google');
+        } catch (error: any) {
+            console.error('Error linking Google account:', error);
+            alert(`Erro ao conectar com Google: ${error?.message || 'Erro Desconhecido'}`);
         } finally {
             setLoading(false);
         }

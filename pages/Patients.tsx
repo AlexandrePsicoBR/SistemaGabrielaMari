@@ -49,7 +49,8 @@ const Patients: React.FC<PatientsProps> = ({ onPatientClick }) => {
             title,
             date
           )
-        `);
+        `)
+        .order('name', { ascending: true });
 
       // Race the fetch against the timeout
       // Note: Supabase types usually return { data, error } but Promise.race returns the result of the first settled promise.

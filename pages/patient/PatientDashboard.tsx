@@ -103,8 +103,8 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({ onNavigate }) => {
                         const today = new Date();
                         const thirtyDays = new Date();
                         thirtyDays.setDate(today.getDate() + 30);
-                        const todayStr = today.toISOString().split('T')[0];
-                        const thirtyDaysStr = thirtyDays.toISOString().split('T')[0];
+                        const todayStr = today.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+                        const thirtyDaysStr = thirtyDays.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
 
                         const expirations = allHistory.filter((h: any) => {
                             let expDateStr = h.expiration_date;
@@ -116,7 +116,7 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({ onNavigate }) => {
                                     const months = serviceMap.get(normalizedTitle);
                                     const d = new Date(h.date);
                                     d.setMonth(d.getMonth() + months);
-                                    expDateStr = d.toISOString().split('T')[0];
+                                    expDateStr = d.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
                                 }
                             }
 
@@ -165,7 +165,7 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({ onNavigate }) => {
 
     const handleReschedule = (proc: any) => {
         // 1. Open WhatsApp
-        const isExpired = proc.expirationDate < new Date().toISOString().split('T')[0];
+        const isExpired = proc.expirationDate < new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
         const message = `Olá, gostaria de agendar o retorno do procedimento ${proc.title} que ${isExpired ? 'venceu' : 'vence'} em ${formatDate(new Date(proc.expirationDate))}.`;
         window.open(`https://wa.me/5512987029253?text=${encodeURIComponent(message)}`, '_blank');
 
@@ -337,7 +337,7 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({ onNavigate }) => {
                                     expiredProcedures.map((proc, idx) => {
                                         const expDate = new Date(proc.expirationDate);
                                         const today = new Date();
-                                        const isExpired = proc.expirationDate < new Date().toISOString().split('T')[0];
+                                        const isExpired = proc.expirationDate < new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
 
                                         return (
                                             <div key={idx} className="p-5 flex flex-col md:flex-row items-start md:items-center justify-between hover:bg-background-light transition-colors gap-4">

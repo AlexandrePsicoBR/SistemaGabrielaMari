@@ -10,7 +10,7 @@ interface ModalProps {
 }
 
 const NewEvolutionModal: React.FC<ModalProps> = ({ onClose, onSave, initialData }) => {
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState(new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }));
   const [procedure, setProcedure] = useState('');
   const [patientNote, setPatientNote] = useState('');
   const [technicalNote, setTechnicalNote] = useState('');
@@ -119,7 +119,7 @@ const NewEvolutionModal: React.FC<ModalProps> = ({ onClose, onSave, initialData 
     if (selectedServiceData && selectedServiceData.expiration_months && selectedServiceData.expiration_months > 0) {
       const d = new Date(date);
       d.setMonth(d.getMonth() + selectedServiceData.expiration_months);
-      expirationDate = d.toISOString().split('T')[0];
+      expirationDate = d.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
     }
 
     // 3. Prepare Evolution Data
@@ -172,7 +172,6 @@ const NewEvolutionModal: React.FC<ModalProps> = ({ onClose, onSave, initialData 
         <div className="px-8 py-5 border-b border-[#e3e0de] flex justify-between items-center bg-white sticky top-0 z-10">
           <div>
             <h2 className="text-2xl font-serif font-bold text-text-main">{initialData ? 'Editar Evolução' : 'Nova Evolução Clínica'}</h2>
-            <p className="text-sm text-text-muted mt-1">Isabella Rossi</p>
           </div>
           <button onClick={onClose} className="p-2 rounded-full hover:bg-gray-100 text-text-muted transition-colors">
             <span className="material-symbols-outlined">close</span>

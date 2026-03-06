@@ -81,7 +81,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectPatient }) =>
       }
 
       // 2. Financials
-      const today = new Date().toISOString().split('T')[0];
+      const today = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
       const currentMonth = new Date().getMonth();
       const currentYear = new Date().getFullYear();
 
@@ -194,8 +194,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectPatient }) =>
       const thirtyDaysFuture = new Date();
       thirtyDaysFuture.setDate(todayDate.getDate() + 30);
 
-      const todayStr = todayDate.toISOString().split('T')[0];
-      const futureStr = thirtyDaysFuture.toISOString().split('T')[0];
+      const todayStr = todayDate.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+      const futureStr = thirtyDaysFuture.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
 
       // A. Fetch Services Metadata for dynamic calculation
       const { data: servicesData } = await supabase
@@ -238,7 +238,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectPatient }) =>
             const months = serviceMap.get(item.title);
             const d = new Date(item.date);
             d.setMonth(d.getMonth() + months);
-            expDateStr = d.toISOString().split('T')[0];
+            expDateStr = d.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
             // Attach strict property for the UI to use
             item.expiration_date = expDateStr;
           }

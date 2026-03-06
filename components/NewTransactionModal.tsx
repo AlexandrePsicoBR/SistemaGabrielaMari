@@ -38,7 +38,7 @@ const NewTransactionModal: React.FC<ModalProps> = ({ onClose, onSave, initialDat
     patientName: '',
     value: '',
     cost: '', // New state for cost
-    date: new Date().toISOString().split('T')[0],
+    date: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }),
     category: '',
     paymentMethod: '',
     isPaid: true

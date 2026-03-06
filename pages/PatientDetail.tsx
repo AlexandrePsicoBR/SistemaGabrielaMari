@@ -149,7 +149,7 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
               const months = serviceMap.get(normalizedTitle);
               const d = new Date(h.date);
               d.setMonth(d.getMonth() + months);
-              expirationDate = d.toISOString().split('T')[0];
+              expirationDate = d.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
             }
           }
 
@@ -904,7 +904,7 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
         .from('clinical_history')
         .insert({
           patient_id: currentPatient.id,
-          date: new Date().toISOString().split('T')[0], // Today YYYY-MM-DD
+          date: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }), // Today YYYY-MM-DD
           title: `Documento Assinado: ${docType.charAt(0).toUpperCase() + docType.slice(1)}`,
           doctor: 'Dra. Gabriela Mari',
           description: `Documento de ${docType} gerado e assinado.`,
@@ -1297,7 +1297,7 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
 
                 // Fix timezone issue for comparison (simple approach)
                 const expStr = h.expirationDate;
-                const thirtyDaysStr = thirtyDays.toISOString().split('T')[0];
+                const thirtyDaysStr = thirtyDays.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
 
                 // Filter out dismissed expirations
                 if (h.tags?.includes('canceled_expiration')) return false;
@@ -1420,7 +1420,7 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                         e.stopPropagation();
                         setSelectedEvolution({
                           id: event.id,
-                          date: event.isoDate || new Date().toISOString().split('T')[0],
+                          date: event.isoDate || new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }),
                           title: event.title,
                           patientSummary: event.patientSummary,
                           clinicalNotes: event.clinicalNotes,
@@ -1486,7 +1486,7 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                         <p className="text-[10px] font-bold tracking-widest text-gray-500 uppercase">Notas Clínicas</p>
                         <span className="bg-gray-100 border border-gray-200 text-gray-500 text-[9px] font-bold px-1.5 py-0.5 rounded">INTERNO</span>
                       </div>
-                      <div className="bg-gray-50 rounded-lg p-4 border border-gray-100 font-mono text-xs text-gray-700 leading-relaxed">
+                      <div className="bg-gray-50 rounded-lg p-4 border border-gray-100 font-mono text-xs text-gray-700 leading-relaxed whitespace-pre-wrap">
                         {event.clinicalNotes || event.description}
                       </div>
                     </div>

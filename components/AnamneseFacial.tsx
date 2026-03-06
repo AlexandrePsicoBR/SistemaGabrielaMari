@@ -128,13 +128,86 @@ const AnamneseFacial: React.FC<AnamneseFacialProps> = ({ patientData, onPrint, p
 
             const signature = sign(dataToSign);
 
+            // Formatter for clinical notes
+            const formatFacialNotes = (data: any) => {
+                const lines = [];
+                
+                // Histórico de Saúde
+                const saude = [];
+                const historicoKeys = ['diabetes', 'hipertensao', 'tireoide', 'cardiacos', 'marcapasso', 'autoimune', 'coagulacao', 'herpes', 'epilepsia', 'gestante', 'lactante', 'tentante'];
+                historicoKeys.forEach(k => {
+                    if (data.historicoSaude[k]) saude.push(k.charAt(0).toUpperCase() + k.slice(1).replace(/([A-Z])/g, ' $1').trim());
+                });
+                if (saude.length > 0) lines.push(`*Histórico Clínico:* ${saude.join(', ')}`);
+                if (data.historicoSaude.alergias) lines.push(`*Alergias:* ${data.historicoSaude.alergias}`);
+                if (data.historicoSaude.medicamentos) lines.push(`*Medicamentos:* ${data.historicoSaude.medicamentos}`);
+                
+                // Hábitos
+                lines.push(`*Hábitos:* Sol: ${data.habitosDiarios.exposicaoSolar} | Fumo: ${data.habitosDiarios.tabagismo} | Água: ${data.habitosDiarios.agua} | Alimentação: ${data.habitosDiarios.alimentacao}`);
+
+                // Pele
+                const pele = data.avaliacaoPele;
+                const addPeleCategory = (label: string, category: any, keys: string[]) => {
+                    const marked = keys.filter((k: string) => category[k]).map((k: string) => k.charAt(0).toUpperCase() + k.slice(1).replace('grau', 'Grau '));
+                    if (marked.length > 0) lines.push(`*${label}:* ${marked.join(', ')}`);
+                };
+                
+                addPeleCategory('Biotipo', pele.biotipo, ['eudermica', 'lipidica', 'alipica', 'mista']);
+                addPeleCategory('Estado', pele.estado, ['normal', 'desidratado', 'sensibilizado', 'acneico', 'seborreico']);
+                addPeleCategory('Textura', pele.textura, ['lisa', 'aspera']);
+                addPeleCategory('Espessura', pele.espessura, ['fina', 'muitofina', 'espessa']);
+                addPeleCategory('Óstios', pele.ostios, ['dilatadosT', 'dilatadosFace', 'contraidos']);
+                addPeleCategory('Acne', pele.acne, ['grau1', 'grau2', 'grau3', 'grau4', 'grau5']);
+                
+                const fototipos = ['tipo1', 'tipo2', 'tipo3', 'tipo4', 'tipo5'].filter(k => pele.fototipo[k]).map(k => 'Tipo ' + k.slice(4));
+                if (fototipos.length > 0) lines.push(`*Fototipo:* ${fototipos.join(', ')}`);
+                
+                const invol = ['linhas', 'sulcos', 'rugas', 'elastose', 'ptose'].filter(k => pele.involucao[k]).map(k => k.charAt(0).toUpperCase() + k.slice(1));
+                if (invol.length > 0 || pele.involucao.local) {
+                    lines.push(`*Involução:* ${invol.join(', ')} ${pele.involucao.local ? `(${pele.involucao.local})` : ''}`);
+                }
+                
+                const manchas = ['acromia', 'efelides', 'hipocromia', 'melanose', 'hipercromia', 'melanoseSolar'].filter(k => pele.manchas[k]).map(k => k.charAt(0).toUpperCase() + k.slice(1));
+                if (manchas.length > 0 || pele.manchas.outros) {
+                    lines.push(`*Manchas:* ${manchas.join(', ')} ${pele.manchas.outros ? `(${pele.manchas.outros})` : ''}`);
+                }
+
+                const vasc = ['equimose', 'petequias', 'telangectasias', 'eritema', 'nevoRubi', 'rosacea'].filter(k => pele.vascular[k]).map(k => k.charAt(0).toUpperCase() + k.slice(1));
+                if (vasc.length > 0 || pele.vascular.outros) {
+                    lines.push(`*Vascular:* ${vasc.join(', ')} ${pele.vascular.outros ? `(${pele.vascular.outros})` : ''}`);
+                }
+
+                const lesoes = ['comedoes', 'papula', 'pustula', 'millium', 'cisto', 'nodulo', 'siringoma', 'nevoMelanocitico', 'xantelasma', 'dermatite', 'ulceracao', 'hiperqueratose', 'psoriase'].filter(k => pele.lesoes[k]).map(k => k.charAt(0).toUpperCase() + k.slice(1));
+                if (lesoes.length > 0 || pele.lesoes.outros) {
+                    lines.push(`*Lesões:* ${lesoes.join(', ')} ${pele.lesoes.outros ? `(${pele.lesoes.outros})` : ''}`);
+                }
+
+                const olheiras = [];
+                if (pele.olheiras.sim) olheiras.push('Sim');
+                if (pele.olheiras.nao) olheiras.push('Não');
+                if (pele.olheiras.obs) olheiras.push(pele.olheiras.obs);
+                if (olheiras.length > 0) lines.push(`*Olheiras:* ${olheiras.join(' - ')}`);
+
+                if (pele.flacidez.tissular) lines.push(`*Flacidez Tissular:* ${pele.flacidez.tissular}`);
+                if (pele.flacidez.muscular) lines.push(`*Flacidez Muscular:* ${pele.flacidez.muscular}`);
+
+                // Plano
+                const plano = [];
+                if (data.planoTratamento.objetivos) plano.push(`Objetivos: ${data.planoTratamento.objetivos}`);
+                if (data.planoTratamento.tratamentoProposto) plano.push(`Proposto: ${data.planoTratamento.tratamentoProposto}`);
+                if (data.planoTratamento.observacoes) plano.push(`Obs: ${data.planoTratamento.observacoes}`);
+                if (plano.length > 0) lines.push(`\n*Plano de Tratamento*\n${plano.join('\n')}`);
+
+                return lines.join('\n');
+            };
+
             const { error } = await supabase.from('clinical_history').insert({
                 patient_id: patientId,
                 date: new Date().toISOString(),
                 title: 'Anamnese Facial',
                 description: 'Ficha de Anamnese Facial preenchida e assinada.',
                 patient_summary: formData.queixaPrincipal,
-                clinical_notes: JSON.stringify(formData),
+                clinical_notes: formatFacialNotes(formData),
                 type: 'anamnese-facial',
                 status: 'Concluído',
                 tags: ['anamnese', 'facial'],

@@ -30,7 +30,7 @@ interface PhotoPair {
 const NewPhotoModal: React.FC<ModalProps> = ({ onClose, onSave }) => {
   const [formData, setFormData] = useState({
     title: '',
-    date: new Date().toISOString().split('T')[0],
+    date: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }),
     description: ''
   });
 
