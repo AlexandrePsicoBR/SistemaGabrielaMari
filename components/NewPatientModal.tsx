@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
+import { createClient } from '@supabase/supabase-js';
 
 interface ModalProps {
   onClose: () => void;
@@ -158,27 +159,48 @@ const NewPatientModal: React.FC<ModalProps> = ({ onClose, onSave, initialData })
       if (!isEditing) {
         const firstName = formData.name.trim().split(' ')[0];
         // Password rule: FirstName + 1234
-        // Adding a slight capitalization rule or keeping as typed? 
-        // Let's keep it exact as requested: "primeiro nome da pessoa + 1234"
         const defaultPassword = `${firstName}1234`;
 
-        const { data: authData, error: authError } = await supabase.auth.signUp({
+        // Create a secondary non-persistent client so we don't log out the admin
+        // We need to use the actual URL and Anon Key from env vars
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+        const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+        const supabaseAdmin = createClient(supabaseUrl, supabaseAnonKey, {
+          auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+            detectSessionInUrl: false,
+          },
+        });
+
+        const { data: authData, error: authError } = await supabaseAdmin.auth.signUp({
           email: formData.email,
           password: defaultPassword,
           options: {
             data: {
               full_name: formData.name,
-              role: 'patient', // Custom claim/metadata
+              role: 'patient', // Ensure they are a common user, not admin
             }
           }
         });
 
         if (authError) {
           console.error('Erro ao criar usuário Auth para o paciente:', authError);
-          // O paciente foi criado no banco de dados, mas não no Auth. 
           alert(`Paciente salvo, mas houve um erro ao criar o acesso dele (Auth): ${authError.message}`);
         } else {
           console.log('Usuário Auth do paciente criado com sucesso!', authData);
+          
+          // Send "Welcome / Reset Password" email so they can log in
+          const { error: resetError } = await supabaseAdmin.auth.resetPasswordForEmail(formData.email, {
+            redirectTo: 'https://portal.gabrielamari.com.br/',
+          });
+          
+          if (resetError) {
+             console.error('Erro ao enviar email de boas vindas:', resetError);
+             alert('Usuário criado, mas não foi possível enviar o email de boas vindas automaticamente.');
+          } else {
+             alert('Paciente cadastrado com sucesso! Um e-mail de boas-vindas com o link de acesso foi enviado.');
+          }
         }
       }
 

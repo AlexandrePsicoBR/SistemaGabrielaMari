@@ -19,7 +19,7 @@ interface TermoLiftingProps {
 const TermoLifting: React.FC<TermoLiftingProps> = ({ paciente, signatureUrl, signatureDate }) => {
     // Data formatada (ex: 27 de Janeiro de 2026)
     const dataHoje = signatureDate
-        ? formatDate(new Date(signatureDate), { day: 'numeric', month: 'long', year: 'numeric' })
+        ? formatDate(signatureDate, { day: 'numeric', month: 'long', year: 'numeric' })
         : formatDate(new Date(), { day: 'numeric', month: 'long', year: 'numeric' });
 
     // Lógica para preencher alergias

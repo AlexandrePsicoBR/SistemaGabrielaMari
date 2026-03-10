@@ -19,7 +19,7 @@ const TermoBotox: React.FC<TermoProps> = ({ paciente, signatureUrl, signatureDat
         ? (paciente.alergias.length > 0 ? paciente.alergias.join(", ") : "Nego alergias conhecidas")
         : (paciente.alergias || "Nego alergias conhecidas");
 
-    const today = signatureDate ? formatDate(new Date(signatureDate)) : formatDate(new Date());
+    const today = signatureDate ? formatDate(signatureDate) : formatDate(new Date());
 
     return (
         <div className="w-[210mm] min-h-[297mm] p-[20mm] bg-white text-black font-sans text-sm leading-relaxed mx-auto shadow-md print:shadow-none print:w-full print:min-h-0 print:h-auto print:m-0 print:p-[20mm]">

@@ -238,7 +238,7 @@ const PhotoViewerModal: React.FC<ModalProps> = ({ photo, onClose, onUpdate, onDe
                   className="text-xs border border-gray-300 rounded px-2 py-0.5"
                 />
               ) : (
-                <span>{formatDate(new Date(formData.date))}</span>
+                <span>{formatDate(formData.date)}</span>
               )}
             </p>
           </div>

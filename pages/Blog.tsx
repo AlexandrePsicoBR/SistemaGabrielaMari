@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { formatDate } from '../lib/dateUtils';
 import NewPostModal from '../components/NewPostModal';
+import ViewPostModal from '../components/ViewPostModal';
 import { blogService } from '../lib/blog';
 import { BlogPost } from '../types';
 
 const Blog: React.FC = () => {
     const [showNewPostModal, setShowNewPostModal] = useState(false);
+    const [viewingPost, setViewingPost] = useState<BlogPost | null>(null);
     const [posts, setPosts] = useState<BlogPost[]>([]);
     const [loading, setLoading] = useState(true);
     const [page, setPage] = useState(1);
@@ -42,12 +44,14 @@ const Blog: React.FC = () => {
         fetchPosts();
     }, [page, search, category, status]);
 
-    const handleEdit = (post: BlogPost) => {
+    const handleEdit = (post: BlogPost, e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
         setEditingPost(post);
         setShowNewPostModal(true);
     };
 
-    const handleDelete = async (id: string) => {
+    const handleDelete = async (id: string, e?: React.MouseEvent) => {
+        if (e) e.stopPropagation();
         if (confirm('Tem certeza que deseja excluir este post?')) {
             try {
                 await blogService.deletePost(id);
@@ -69,9 +73,9 @@ const Blog: React.FC = () => {
     const canNext = page < totalPages;
 
     return (
-        <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#FDFBF9] animate-fade-in font-sans">
+        <div className="flex-1 overflow-y-auto h-full bg-[#FDFBF9] animate-fade-in font-sans custom-scrollbar relative">
             {/* Header Section */}
-            <header className="flex flex-col px-8 pt-8 pb-4 gap-6 bg-[#FDFBF9]/80 backdrop-blur-md sticky top-0 z-10 border-b border-[#eceae8]">
+            <header className="flex flex-col px-8 pt-8 pb-4 gap-6 bg-[#FDFBF9]/90 backdrop-blur-md md:sticky md:top-0 relative z-10 border-b border-[#eceae8]">
                 <div className="flex items-center justify-between">
                     <div>
                         <h2 className="text-text-main text-4xl font-display font-medium leading-tight">Novidades e Promoções</h2>
@@ -156,7 +160,7 @@ const Blog: React.FC = () => {
             </header>
 
             {/* Grid Content */}
-            <div className="flex-1 overflow-y-auto px-8 py-8 custom-scrollbar">
+            <div className="px-8 py-8">
                 {loading ? (
                     <div className="flex items-center justify-center h-64">
                         <div className="text-primary animate-pulse">Carregando...</div>
@@ -164,8 +168,12 @@ const Blog: React.FC = () => {
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-8 pb-10">
                         {posts.map((post) => (
-                            <div key={post.id} className="group bg-white rounded-2xl overflow-hidden border border-[#eceae8] hover:shadow-xl hover:shadow-primary/5 transition-all duration-300 flex flex-col">
-                                <div className="relative overflow-hidden aspect-[16/10]">
+                            <div 
+                                key={post.id} 
+                                onClick={() => setViewingPost(post)}
+                                className="group bg-white rounded-2xl overflow-hidden border border-[#eceae8] hover:shadow-xl hover:shadow-primary/5 transition-all duration-300 flex flex-col cursor-pointer"
+                            >
+                                <div className="relative overflow-hidden aspect-square">
                                     <div
                                         className="absolute inset-0 bg-center bg-no-repeat bg-cover group-hover:scale-105 transition-transform duration-500"
                                         style={{ backgroundImage: `url("${post.image_url || 'https://via.placeholder.com/400x250?text=Sem+Imagem'}")` }}
@@ -188,19 +196,19 @@ const Blog: React.FC = () => {
                                         <div className="flex items-center gap-2">
                                             <span className="material-symbols-outlined text-sm text-[#7e756d]">event</span>
                                             <span className="text-[#7e756d] text-xs">
-                                                {formatDate(new Date(post.created_at || ''))}
+                                                {formatDate(post.created_at || '')}
                                             </span>
                                         </div>
                                         <div className="flex gap-2">
                                             <button
-                                                onClick={() => handleEdit(post)}
+                                                onClick={(e) => handleEdit(post, e)}
                                                 className="p-2 text-[#7e756d] hover:bg-primary/10 hover:text-primary rounded-lg transition-colors"
                                                 title="Editar"
                                             >
                                                 <span className="material-symbols-outlined text-lg">edit_note</span>
                                             </button>
                                             <button
-                                                onClick={() => handleDelete(post.id)}
+                                                onClick={(e) => handleDelete(post.id, e)}
                                                 className="p-2 text-[#7e756d] hover:bg-red-50 hover:text-red-500 rounded-lg transition-colors"
                                                 title="Excluir"
                                             >
@@ -265,6 +273,14 @@ const Blog: React.FC = () => {
                     }}
                     onSave={handleNewPostSaved}
                     initialData={editingPost}
+                />
+            )}
+
+            {viewingPost && (
+                <ViewPostModal
+                    post={viewingPost}
+                    onClose={() => setViewingPost(null)}
+                    isAdminView={true}
                 />
             )}
         </div>

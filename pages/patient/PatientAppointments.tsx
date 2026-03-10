@@ -123,7 +123,7 @@ const PatientAppointments: React.FC = () => {
                                         </div>
                                         <div>
                                             <p className="text-[10px] uppercase text-text-muted font-bold tracking-tighter leading-none mb-1">Data</p>
-                                            <p className="font-bold text-text-main">{formatDate(new Date(lastAppointment.date))}</p>
+                                            <p className="font-bold text-text-main">{formatDate(lastAppointment.date)}</p>
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-3">
@@ -182,7 +182,7 @@ const PatientAppointments: React.FC = () => {
                                 {appointments.map((apt) => (
                                     <tr key={apt.id} className="hover:bg-primary/5 transition-colors group">
                                         <td className="px-6 py-5">
-                                            <p className="text-sm font-bold text-text-main">{formatDate(new Date(apt.date))}</p>
+                                            <p className="text-sm font-bold text-text-main">{formatDate(apt.date)}</p>
                                         </td>
                                         <td className="px-6 py-5">
                                             <p className="text-sm font-medium text-text-main">{apt.title}</p>
@@ -219,7 +219,7 @@ const PatientAppointments: React.FC = () => {
                             <div key={apt.id} className="bg-white p-5 rounded-xl border border-[#eceae8] shadow-sm flex flex-col gap-4">
                                 <div className="flex justify-between items-start">
                                     <div>
-                                        <span className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-1 block">{formatDate(new Date(apt.date))}</span>
+                                        <span className="text-[10px] font-bold uppercase tracking-widest text-text-muted mb-1 block">{formatDate(apt.date)}</span>
                                         <h4 className="font-bold text-lg text-text-main leading-tight">{apt.title}</h4>
                                     </div>
                                     <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-green-50 text-green-600 border border-green-100">
@@ -268,7 +268,7 @@ const PatientAppointments: React.FC = () => {
                             <div className="mb-6">
                                 <span className="text-primary text-xs font-bold uppercase tracking-widest block mb-2">Procedimento</span>
                                 <h4 className="text-2xl font-bold text-text-main mb-1">{selectedAppointment.title}</h4>
-                                <p className="text-sm text-text-muted">{formatDate(new Date(selectedAppointment.date), { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
+                                <p className="text-sm text-text-muted">{formatDate(selectedAppointment.date, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
                             </div>
 
                             <div className="space-y-4">

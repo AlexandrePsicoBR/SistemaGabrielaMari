@@ -166,7 +166,7 @@ const PatientDashboard: React.FC<PatientDashboardProps> = ({ onNavigate }) => {
     const handleReschedule = (proc: any) => {
         // 1. Open WhatsApp
         const isExpired = proc.expirationDate < new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
-        const message = `Olá, gostaria de agendar o retorno do procedimento ${proc.title} que ${isExpired ? 'venceu' : 'vence'} em ${formatDate(new Date(proc.expirationDate))}.`;
+        const message = `Olá, gostaria de agendar o retorno do procedimento ${proc.title} que ${isExpired ? 'venceu' : 'vence'} em ${formatDate(proc.expirationDate)}.`;
         window.open(`https://wa.me/5512987029253?text=${encodeURIComponent(message)}`, '_blank');
 
         // 2. Dismiss locally

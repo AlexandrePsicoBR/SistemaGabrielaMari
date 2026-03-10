@@ -80,7 +80,7 @@ const Patients: React.FC<PatientsProps> = ({ onPatientClick }) => {
 
           const lastItem = history[0];
           const lastProcedure = lastItem ? lastItem.title : '-';
-          const lastDate = lastItem ? formatDate(new Date(lastItem.date)) : '-';
+          const lastDate = lastItem ? formatDate(lastItem.date) : '-';
 
           return {
             id: p.id,

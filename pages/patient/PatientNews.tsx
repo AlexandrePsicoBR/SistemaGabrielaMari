@@ -2,11 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { formatDate } from '../../lib/dateUtils';
 import { blogService } from '../../lib/blog';
 import { BlogPost } from '../../types';
+import ViewPostModal from '../../components/ViewPostModal';
 
 const PatientNews: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [posts, setPosts] = useState<BlogPost[]>([]);
     const [searchTerm, setSearchTerm] = useState('');
+    const [viewingPost, setViewingPost] = useState<BlogPost | null>(null);
 
     const fetchPosts = async (search?: string) => {
         setLoading(true);
@@ -95,7 +97,10 @@ const PatientNews: React.FC = () => {
                         {/* Featured Hero Card */}
                         {featuredPost && (
                             <section>
-                                <div className="relative h-[480px] w-full overflow-hidden rounded-2xl shadow-xl group">
+                                <div 
+                                    className="relative h-[480px] w-full overflow-hidden rounded-2xl shadow-xl group cursor-pointer"
+                                    onClick={() => setViewingPost(featuredPost)}
+                                >
                                     <div
                                         className="absolute inset-0 bg-center bg-cover transition-transform duration-700 group-hover:scale-105"
                                         style={{ backgroundImage: `url('${featuredPost.image_url || 'https://images.unsplash.com/photo-1616394584738-fc6e612e71b9?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80'}')` }}
@@ -105,21 +110,17 @@ const PatientNews: React.FC = () => {
                                         <span className="inline-block px-3 py-1 bg-primary text-white text-[10px] font-bold uppercase tracking-widest rounded-full mb-4">
                                             {featuredPost.category || 'Destaque'}
                                         </span>
-                                        <h3 className="text-4xl font-display font-bold leading-tight mb-4">{featuredPost.title}</h3>
-                                        {/* Using excerpt or slicing content for summary if excerpt not available. Assuming 'excerpt' exists or we slice content. 
-                                            Checking types.ts would verify, but using content slice is safe fallback. */}
+                                        <h3 className="text-4xl font-display font-bold leading-tight mb-4 group-hover:text-primary transition-colors">{featuredPost.title}</h3>
                                         <div
                                             className="text-gray-200 text-lg mb-6 font-light leading-relaxed line-clamp-3"
                                             dangerouslySetInnerHTML={{ __html: featuredPost.content || '' }}
                                         />
-                                        {/* Note: Content often contains HTML. Ideally strip tags for preview. 
-                                            For now, relying on line-clamp to handle length and rendering html inside but restricted. 
-                                            Better to strip tags: featuredPost.content.replace(/<[^>]*>?/gm, '').slice(0, 150) + '...' */}
 
                                         <a
                                             href={getWhatsAppLink(featuredPost.title)}
                                             target="_blank"
                                             rel="noopener noreferrer"
+                                            onClick={(e) => e.stopPropagation()}
                                             className="inline-flex items-center gap-2 px-8 py-4 bg-primary hover:bg-primary/90 text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-primary/20 cursor-pointer"
                                         >
                                             <span>Quero pra Mim</span>
@@ -136,12 +137,15 @@ const PatientNews: React.FC = () => {
                                 <div className="flex items-center justify-between mb-8">
                                     <h4 className="text-2xl font-display font-bold text-text-main">Últimas Novidades</h4>
                                     <div className="h-px flex-1 bg-[#eceae8] mx-6"></div>
-                                    {/* <button className="text-sm font-bold text-primary hover:underline">Ver tudo</button> */}
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 pb-10">
                                     {recentPosts.map((post) => (
-                                        <article key={post.id} className="bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow group border border-[#eceae8] flex flex-col h-full">
-                                            <div className="h-48 overflow-hidden relative shrink-0">
+                                        <article 
+                                            key={post.id} 
+                                            onClick={() => setViewingPost(post)}
+                                            className="bg-white rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-shadow group border border-[#eceae8] flex flex-col h-full cursor-pointer"
+                                        >
+                                            <div className="aspect-square w-full overflow-hidden relative shrink-0">
                                                 <div
                                                     className="w-full h-full bg-center bg-cover transition-transform duration-500 group-hover:scale-110"
                                                     style={{ backgroundImage: `url('${post.image_url || 'https://images.unsplash.com/photo-1519494026892-80bbd2d6fd0d?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80'}')` }}
@@ -151,7 +155,7 @@ const PatientNews: React.FC = () => {
                                                 </span>
                                             </div>
                                             <div className="p-6 flex flex-col flex-1">
-                                                <h5 className="text-lg font-display font-bold mb-3 line-clamp-2 hover:text-primary transition-colors cursor-pointer text-text-main">
+                                                <h5 className="text-lg font-display font-bold mb-3 line-clamp-2 group-hover:text-primary transition-colors text-text-main">
                                                     {post.title}
                                                 </h5>
                                                 <div
@@ -160,12 +164,13 @@ const PatientNews: React.FC = () => {
                                                 ></div>
                                                 <div className="flex items-center justify-between mt-auto pt-4 border-t border-[#eceae8]">
                                                     <span className="text-xs text-text-muted">
-                                                        {formatDate(new Date(post.created_at), { day: '2-digit', month: 'short', year: 'numeric' })}
+                                                        {formatDate(post.created_at, { day: '2-digit', month: 'short', year: 'numeric' })}
                                                     </span>
                                                     <a
                                                         href={getWhatsAppLink(post.title)}
                                                         target="_blank"
                                                         rel="noopener noreferrer"
+                                                        onClick={(e) => e.stopPropagation()}
                                                         className="text-primary material-symbols-outlined hover:scale-110 transition-transform cursor-pointer"
                                                         title="Quero pra Mim"
                                                     >
@@ -180,9 +185,15 @@ const PatientNews: React.FC = () => {
                         )}
                     </>
                 )}
-
-                {/* Newsletter Section Removed as per request */}
             </div>
+
+            {viewingPost && (
+                <ViewPostModal
+                    post={viewingPost}
+                    onClose={() => setViewingPost(null)}
+                    isAdminView={false}
+                />
+            )}
         </div >
     );
 };

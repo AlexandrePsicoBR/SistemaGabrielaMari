@@ -19,7 +19,7 @@ interface TermoIntradermoProps {
 const TermoIntradermo: React.FC<TermoIntradermoProps> = ({ paciente, signatureUrl, signatureDate }) => {
     // Pega a data de hoje formatada (ex: 27/01/2026)
     const dataHoje = signatureDate
-        ? formatDate(new Date(signatureDate))
+        ? formatDate(signatureDate)
         : formatDate(new Date());
 
     // Lógica para preencher o campo de alergias

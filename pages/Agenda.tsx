@@ -220,7 +220,7 @@ const Agenda: React.FC = () => {
       <div className="flex-1 overflow-y-auto overflow-x-auto relative flex flex-col">
 
         {/* Header Row (Days of Week) */}
-        <div className={`flex border-b border-[#e3e0de] sticky top-0 bg-white z-20`}>
+        <div className={`flex border-b border-[#e3e0de] md:sticky md:top-0 relative bg-white z-20`}>
           {/* Spacer for time column only in day/week view */}
           {viewMode !== 'month' && <div className="w-16 shrink-0 border-r border-[#e3e0de]"></div>}
 

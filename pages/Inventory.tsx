@@ -240,7 +240,7 @@ const Inventory: React.FC = () => {
                         )}
                       </div>
                     </td>
-                    <td className="py-4 px-6 text-right"><p className="text-sm font-medium text-text-main">{formatDate(new Date(item.lastRestock))}</p></td>
+                    <td className="py-4 px-6 text-right"><p className="text-sm font-medium text-text-main">{formatDate(item.lastRestock)}</p></td>
                     <td className="py-4 px-6 text-center">
                       <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button onClick={() => handleEdit(item)} className="p-1.5 text-text-muted hover:text-primary transition-colors">
@@ -303,7 +303,7 @@ const Inventory: React.FC = () => {
                           <span className="text-xs text-text-muted">(Baixo)</span>
                         )}
                       </div>
-                      <p className="text-xs text-text-muted">Últ.: {formatDate(new Date(item.lastRestock))}</p>
+                      <p className="text-xs text-text-muted">Últ.: {formatDate(item.lastRestock)}</p>
                     </div>
                   </div>
                 </div>

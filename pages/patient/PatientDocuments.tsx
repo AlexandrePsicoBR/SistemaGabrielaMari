@@ -270,7 +270,7 @@ const PatientDocuments: React.FC = () => {
                                                     </div>
                                                 </td>
                                                 <td className="px-8 py-6 text-sm text-text-main/60">
-                                                    {formatDate(new Date(doc.created_at))}
+                                                    {formatDate(doc.created_at)}
                                                 </td>
                                                 <td className="px-8 py-6">
                                                     {getStatusBadge(doc.status)}
@@ -325,7 +325,7 @@ const PatientDocuments: React.FC = () => {
                                         </div>
                                         <div>
                                             <h4 className="font-bold text-text-main leading-tight">{doc.title}</h4>
-                                            <p className="text-xs text-text-muted mt-1">{formatDate(new Date(doc.created_at))}</p>
+                                            <p className="text-xs text-text-muted mt-1">{formatDate(doc.created_at)}</p>
                                         </div>
                                     </div>
 

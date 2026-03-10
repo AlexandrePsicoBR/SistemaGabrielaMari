@@ -156,7 +156,7 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
           return {
             id: h.id,
             title: h.title,
-            date: formatDate(new Date(h.date), { day: '2-digit', month: 'short', year: 'numeric' }),
+            date: formatDate(h.date, { day: '2-digit', month: 'short', year: 'numeric' }),
             isoDate: h.date,
             doctor: h.doctor || 'Dra. Gabriela Mari',
             icon: h.type === 'procedure' ? 'face' : 'medical_services',
@@ -700,7 +700,7 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
     doc.text(`CPF: ${currentPatient?.cpf || 'Não informado'}`, col2X, currentY);
     currentY += lineHeight;
 
-    doc.text(`Nascimento: ${formatDate(new Date(patientData.birthDate))}`, col1X, currentY);
+    doc.text(`Nascimento: ${formatDate(patientData.birthDate)}`, col1X, currentY);
     doc.text(`Idade: ${currentPatient ? new Date().getFullYear() - new Date(currentPatient.birth_date).getFullYear() : '-'} anos`, col2X, currentY);
     currentY += lineHeight;
 
@@ -790,7 +790,7 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
     currentY += 8;
 
     const financialTableData = financialRecords.map(rec => [
-      formatDate(new Date(rec.date)),
+      formatDate(rec.date),
       rec.description,
       rec.paymentMethod || '-',
       rec.status,
@@ -825,7 +825,7 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
       const docsTableData = allDocs.map(d => [
         d.title || d.type.charAt(0).toUpperCase() + d.type.slice(1).replace('-', ' '),
         d.status === 'signed' ? 'Assinado' : 'Pendente',
-        d.signed_at ? formatDate(new Date(d.signed_at)) : '-',
+        d.signed_at ? formatDate(d.signed_at) : '-',
         d.admin_signature ? `Assinatura Digital:\n${d.admin_signature}` : '-'
       ]);
 
@@ -926,7 +926,7 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
       const newEvent: HistoryEvent = {
         id: historyEntry.id,
         title: historyEntry.title,
-        date: formatDate(new Date(historyEntry.date), { day: '2-digit', month: 'short', year: 'numeric' }),
+        date: formatDate(historyEntry.date, { day: '2-digit', month: 'short', year: 'numeric' }),
         isoDate: historyEntry.date,
         doctor: historyEntry.doctor,
         patientSummary: historyEntry.patient_summary,
@@ -994,7 +994,7 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
         // Update local state
         setHistoryData(historyData.map(h => h.id === selectedEvolution.id ? {
           ...h,
-          date: formatDate(new Date(data.date), { day: '2-digit', month: 'short', year: 'numeric' }),
+          date: formatDate(data.date, { day: '2-digit', month: 'short', year: 'numeric' }),
           isoDate: data.date,
           title: data.title,
           patientSummary: data.patientSummary,
@@ -1031,7 +1031,7 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
         const newEvent: HistoryEvent = {
           id: inserted.id,
           title: inserted.title,
-          date: formatDate(new Date(inserted.date), { day: '2-digit', month: 'short', year: 'numeric' }),
+          date: formatDate(inserted.date, { day: '2-digit', month: 'short', year: 'numeric' }),
           isoDate: inserted.date,
           doctor: inserted.doctor,
           patientSummary: inserted.patient_summary,
@@ -1635,7 +1635,7 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
               <span className="text-xs text-text-muted bg-gray-100 px-2 py-1 rounded">
                 {item.date.includes('-') && item.date.length === 10
                   ? item.date.split('-').reverse().join('/')
-                  : formatDate(new Date(item.date))
+                  : formatDate(item.date)
                 }
               </span>
             </div>
@@ -1717,7 +1717,7 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
           <tbody className="divide-y divide-[#f3f2f1]">
             {financialRecords.map((record) => (
               <tr key={record.id} className="hover:bg-gray-50 transition-colors group">
-                <td className="py-4 px-6 text-sm font-medium text-text-main">{formatDate(new Date(record.date), { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                <td className="py-4 px-6 text-sm font-medium text-text-main">{formatDate(record.date, { day: '2-digit', month: 'short', year: 'numeric' })}</td>
                 <td className="py-4 px-6">
                   <span className="text-sm font-bold text-text-main block">{record.description.split(' - ')[0]}</span>
                   <span className="text-xs text-text-muted">{record.description.split(' - ')[1] || record.category}</span>
@@ -1795,7 +1795,7 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
               <div className="flex justify-between items-start">
                 <div>
                   <span className="text-xs text-text-muted block mb-1 uppercase font-bold tracking-wide">
-                    {formatDate(new Date(record.date), { day: '2-digit', month: 'short' })}
+                    {formatDate(record.date, { day: '2-digit', month: 'short' })}
                   </span>
                   <span className="font-bold text-text-main block">{record.description.split(' - ')[0]}</span>
                   <span className="text-xs text-text-muted">{record.description.split(' - ')[1] || record.category}</span>
@@ -2577,7 +2577,7 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
         </div>
       </div>
 
-      <div className="bg-white sticky top-0 z-10 border-b border-[#f3f2f1] px-8 pt-2 print:hidden">
+      <div className="bg-white md:sticky md:top-0 relative z-10 border-b border-[#f3f2f1] px-8 pt-2 print:hidden">
         <div className="flex gap-4 md:gap-8 overflow-x-auto pb-1 scrollbar-hide">
           {tabs.map((tab) => (
             <button
@@ -2714,7 +2714,7 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                 <TermoBotox
                   paciente={{
                     nome: patientData.name,
-                    dataNascimento: formatDate(new Date(patientData.birthDate)),
+                    dataNascimento: formatDate(patientData.birthDate),
                     telefone: patientData.phone,
                     cpf: "123.456.789-00",
                     alergias: anamnesisAllergies || currentPatient.allergies
@@ -2727,7 +2727,7 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                 <TermoBioestimulador
                   paciente={{
                     nome: patientData.name,
-                    dataNascimento: formatDate(new Date(patientData.birthDate)),
+                    dataNascimento: formatDate(patientData.birthDate),
                     telefone: patientData.phone,
                     cpf: "123.456.789-00",
                     alergias: anamnesisAllergies || currentPatient.allergies
@@ -2740,7 +2740,7 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                 <TermoFioPDO
                   paciente={{
                     nome: patientData.name,
-                    dataNascimento: formatDate(new Date(patientData.birthDate)),
+                    dataNascimento: formatDate(patientData.birthDate),
                     telefone: patientData.phone,
                     cpf: "123.456.789-00",
                     alergias: anamnesisAllergies || currentPatient.allergies
@@ -2753,7 +2753,7 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                 <CartaHialuronidase
                   paciente={{
                     nome: patientData.name,
-                    dataNascimento: formatDate(new Date(patientData.birthDate)),
+                    dataNascimento: formatDate(patientData.birthDate),
                     telefone: patientData.phone,
                     cpf: "123.456.789-00",
                     alergias: anamnesisAllergies || currentPatient.allergies
@@ -2766,7 +2766,7 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                 <TermoHidrolipo
                   paciente={{
                     nome: patientData.name,
-                    dataNascimento: formatDate(new Date(patientData.birthDate)),
+                    dataNascimento: formatDate(patientData.birthDate),
                     telefone: patientData.phone,
                     cpf: "123.456.789-00",
                     alergias: anamnesisAllergies || currentPatient.allergies
@@ -2779,7 +2779,7 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                 <TermoIntradermo
                   paciente={{
                     nome: patientData.name,
-                    dataNascimento: formatDate(new Date(patientData.birthDate)),
+                    dataNascimento: formatDate(patientData.birthDate),
                     telefone: patientData.phone,
                     cpf: "123.456.789-00",
                     alergias: anamnesisAllergies || currentPatient.allergies
@@ -2792,7 +2792,7 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                 <TermoLifting
                   paciente={{
                     nome: patientData.name,
-                    dataNascimento: formatDate(new Date(patientData.birthDate)),
+                    dataNascimento: formatDate(patientData.birthDate),
                     telefone: patientData.phone,
                     cpf: "123.456.789-00",
                     endereco: patientData.address,
@@ -2804,7 +2804,7 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                 <TermoMicroagulhamento
                   paciente={{
                     nome: patientData.name,
-                    dataNascimento: formatDate(new Date(patientData.birthDate)),
+                    dataNascimento: formatDate(patientData.birthDate),
                     telefone: patientData.phone,
                     cpf: "123.456.789-00",
                     alergias: anamnesisAllergies || currentPatient.allergies
@@ -2815,7 +2815,7 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                 <TermoPeeling
                   paciente={{
                     nome: patientData.name,
-                    dataNascimento: formatDate(new Date(patientData.birthDate)),
+                    dataNascimento: formatDate(patientData.birthDate),
                     telefone: patientData.phone,
                     cpf: "123.456.789-00",
                     alergias: anamnesisAllergies || currentPatient.allergies
@@ -2826,7 +2826,7 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                 <TermoPreenchimento
                   paciente={{
                     nome: patientData.name,
-                    dataNascimento: formatDate(new Date(patientData.birthDate)),
+                    dataNascimento: formatDate(patientData.birthDate),
                     telefone: patientData.phone,
                     cpf: "123.456.789-00",
                     alergias: anamnesisAllergies || currentPatient.allergies

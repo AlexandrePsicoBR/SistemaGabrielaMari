@@ -11,22 +11,50 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("Email ou senha incorretos.");
 
   const [isRegistering, setIsRegistering] = useState(false);
   const [name, setName] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+
+  const validateEmailFormat = (emailText: string) => {
+    // Requires @ and a valid domain at the end.
+    // e.g., blocks @gmail.comi, @gamil.com, etc., by enforcing standard TLDs or at least a strict structure.
+    // A simple yet strict validation for the requested case:
+    const regex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    
+    if (!regex.test(emailText)) return false;
+    
+    // Additional strict checks for common typos
+    const domainPart = emailText.split('@')[1].toLowerCase();
+    
+    // Block common typos requested
+    if (domainPart.endsWith('.comi') || domainPart.includes('gamil') || domainPart.includes('gmal') || domainPart.endsWith('.con') || domainPart.endsWith('.com.brr')) {
+        return false;
+    }
+    
+    return true;
+  };
 
   const handleSignUp = async () => {
     if (password !== confirmPassword) {
       setHasError(true);
-      alert("As senhas não coincidem.");
+      setErrorMessage("As senhas não coincidem.");
       return;
     }
 
     if (!name) {
       setHasError(true);
-      alert("Por favor, preencha o seu nome.");
+      setErrorMessage("Por favor, preencha o seu nome.");
+      return;
+    }
+
+    if (!validateEmailFormat(email)) {
+      setHasError(true);
+      setErrorMessage("Formato de e-mail inválido. Verifique se digitou corretamente (ex: @gmail.com).");
       return;
     }
 
@@ -61,6 +89,8 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setPassword('');
     setConfirmPassword('');
     setName('');
+    setShowPassword(false);
+    setShowConfirmPassword(false);
   };
 
 
@@ -73,6 +103,14 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     try {
       if (!email || !password) {
         setHasError(true);
+        setErrorMessage("Preencha email e senha.");
+        setLoading(false);
+        return;
+      }
+
+      if (!validateEmailFormat(email)) {
+        setHasError(true);
+        setErrorMessage("Formato de e-mail inválido. Verifique se digitou corretamente (ex: @gmail.com).");
         setLoading(false);
         return;
       }
@@ -97,18 +135,15 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
       if (error) {
         setHasError(true);
+        setErrorMessage(error.message === 'Tempo limite de conexão excedido.' ? 'O servidor demorou muito para responder.' : 'Email ou senha incorretos.');
         console.error('Login error:', error.message);
-        alert("Erro no Login: " + (error.message === 'Tempo limite de conexão excedido.' ? 'O servidor demorou muito para responder.' : 'Email ou senha incorretos'));
       } else {
         onLogin();
       }
     } catch (err: any) {
       setHasError(true);
+      setErrorMessage(err.message === 'Tempo limite de conexão excedido.' ? 'Tempo limite de conexão excedido. Verifique sua internet.' : 'Erro inesperado.');
       console.error('Unexpected error:', err);
-      // Ensure we alert the user if it was a timeout
-      if (err.message === 'Tempo limite de conexão excedido.') {
-        alert('Tempo limite de conexão excedido. Verifique sua internet.');
-      }
     } finally {
       if (!isRegistering) setLoading(false);
     }
@@ -121,6 +156,11 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!resetEmail) return;
+
+    if (!validateEmailFormat(resetEmail)) {
+        alert("Formato de e-mail inválido.");
+        return;
+    }
 
     setResetLoading(true);
     try {
@@ -194,7 +234,14 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             {hasError && !isRegistering && (
               <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm font-medium border border-red-100 animate-fade-in flex items-center gap-2">
                 <span className="material-symbols-outlined text-lg">error</span>
-                Email ou senha incorretos.
+                {errorMessage}
+              </div>
+            )}
+
+            {hasError && isRegistering && (
+              <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm font-medium border border-red-100 animate-fade-in flex items-center gap-2">
+                <span className="material-symbols-outlined text-lg">error</span>
+                {errorMessage}
               </div>
             )}
 
@@ -250,16 +297,26 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               <div className="relative">
                 <span className={`material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 ${hasError ? 'text-red-400' : 'text-gray-400'}`}>lock</span>
                 <input
-                  type="password"
+                  type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => {
                     setPassword(e.target.value);
                     setHasError(false);
                   }}
-                  className={`w-full h-12 pl-12 pr-4 rounded-xl bg-white border outline-none transition-all placeholder:text-gray-300 focus:ring-2 ${inputErrorClass}`}
+                  className={`w-full h-12 pl-12 pr-12 rounded-xl bg-white border outline-none transition-all placeholder:text-gray-300 focus:ring-2 ${inputErrorClass}`}
                   placeholder="••••••••"
                   autoComplete="new-password"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                  tabIndex={-1}
+                >
+                  <span className="material-symbols-outlined text-xl">
+                    {showPassword ? 'visibility_off' : 'visibility'}
+                  </span>
+                </button>
               </div>
             </div>
 
@@ -269,13 +326,23 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
                 <div className="relative">
                   <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">lock_clock</span>
                   <input
-                    type="password"
+                    type={showConfirmPassword ? 'text' : 'password'}
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full h-12 pl-12 pr-4 rounded-xl bg-white border border-[#e3e0de] outline-none transition-all placeholder:text-gray-300 focus:ring-2 focus:ring-primary/50 focus:border-primary"
+                    className="w-full h-12 pl-12 pr-12 rounded-xl bg-white border border-[#e3e0de] outline-none transition-all placeholder:text-gray-300 focus:ring-2 focus:ring-primary/50 focus:border-primary"
                     placeholder="••••••••"
                     autoComplete="new-password"
                   />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 focus:outline-none"
+                    tabIndex={-1}
+                  >
+                    <span className="material-symbols-outlined text-xl">
+                      {showConfirmPassword ? 'visibility_off' : 'visibility'}
+                    </span>
+                  </button>
                 </div>
               </div>
             )}

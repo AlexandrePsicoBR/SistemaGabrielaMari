@@ -99,22 +99,25 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectPatient }) =>
 
         transData.forEach((t: any) => {
           const val = Number(t.value);
+          const itemCost = Number(t.cost || 0);
           const tDate = new Date(t.date + 'T12:00:00'); // Compensate timezone simple fix
+          
+          const revenue = t.type === 'income' ? val : 0;
+          const totalCost = t.type === 'income' ? itemCost : val;
 
-          // Balance
-          if (t.type === 'income') balance += val;
-          else balance -= val;
+          // Balance (Overall Profit)
+          balance += (revenue - totalCost);
 
           // Today
           if (t.date === today) {
-            if (t.type === 'income') todayIn += val;
-            else todayOut += val;
+            todayIn += revenue;
+            todayOut += totalCost;
           }
 
           // Month Stats
           if (tDate.getMonth() === currentMonth && tDate.getFullYear() === currentYear) {
-            if (t.type === 'income') monthIn += val;
-            else monthOut += val;
+            monthIn += revenue;
+            monthOut += totalCost;
           }
         });
 
@@ -700,7 +703,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectPatient }) =>
 
       {/* Agenda Section */}
       <div className="bg-white rounded-2xl shadow-sm border border-[#f3f2f1] overflow-hidden">
-        <div className="p-6 border-b border-[#f3f2f1] flex justify-between items-center bg-white sticky top-0 z-10">
+        <div className="p-6 border-b border-[#f3f2f1] flex justify-between items-center bg-white md:sticky md:top-0 relative z-10">
           <h3 className="font-serif font-bold text-lg text-gray-900 flex items-center gap-2">
             <span className="material-symbols-outlined text-primary">calendar_month</span>
             Agenda de Hoje
@@ -772,7 +775,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onNavigate, onSelectPatient }) =>
 
       {/* New Users Block */}
       <div className="bg-white rounded-2xl shadow-sm border border-[#f3f2f1] overflow-hidden">
-        <div className="p-6 border-b border-[#f3f2f1] flex justify-between items-center bg-white sticky top-0 z-10">
+        <div className="p-6 border-b border-[#f3f2f1] flex justify-between items-center bg-white md:sticky md:top-0 relative z-10">
           <h3 className="font-serif font-bold text-lg text-gray-900 flex items-center gap-2">
             <span className="material-symbols-outlined text-purple-600">person_add</span>
             Novos Usuários

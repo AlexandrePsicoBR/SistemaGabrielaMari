@@ -97,7 +97,7 @@ const PatientHistory: React.FC = () => {
                             <div className="flex items-center justify-between mb-6">
                                 <h3 className="text-xl font-bold text-text-main flex items-center gap-2">
                                     <span className="w-8 h-[1px] bg-primary"></span>
-                                    {latestPhoto.title} - {formatDate(new Date(latestPhoto.date), { month: 'long', year: 'numeric' })}
+                                    {latestPhoto.title} - {formatDate(latestPhoto.date, { month: 'long', year: 'numeric' })}
                                 </h3>
                             </div>
 
@@ -175,7 +175,7 @@ const PatientHistory: React.FC = () => {
                                     <div className="flex justify-between items-start">
                                         <div>
                                             <h5 className="text-text-main font-bold text-base group-hover:text-primary transition-colors">{photo.title}</h5>
-                                            <p className="text-text-muted text-sm italic">{formatDate(new Date(photo.date), { month: 'long', year: 'numeric' })}</p>
+                                            <p className="text-text-muted text-sm italic">{formatDate(photo.date, { month: 'long', year: 'numeric' })}</p>
                                         </div>
                                     </div>
                                 </div>

@@ -14,6 +14,12 @@ const Financial: React.FC = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Filtros e Ordenação
+  const [filterMonth, setFilterMonth] = useState<string>(''); // Formato YYYY-MM
+  const [filterCategory, setFilterCategory] = useState<string>('Todas');
+  const [filterStatus, setFilterStatus] = useState<string>('Todos');
+  const [sortConfig, setSortConfig] = useState<{ key: keyof Transaction | 'date', direction: 'asc' | 'desc' } | null>(null);
+
   // Fetch transactions from Supabase
   const fetchTransactions = async () => {
     try {
@@ -36,7 +42,8 @@ const Financial: React.FC = () => {
           type: t.type,
           category: t.category,
           paymentMethod: t.payment_method,
-          status: t.status as any // Allow new statuses
+          status: t.status as any, // Allow new statuses
+          cost: Number(t.cost || 0)
         }));
         setTransactions(mappedTransactions);
       }
@@ -64,23 +71,24 @@ const Financial: React.FC = () => {
         name: month,
         revenue: 0,
         expense: 0,
+        profit: 0,
         index: index // para ordenação se necessário
       }));
 
       transactions.forEach(t => {
         const date = new Date(t.date);
-        // Ajuste de timezone simples para garantir mês correto se necessário, mas string YYYY-MM-DD costuma ser OK
-        // Vamos usar getMonth() direto da data parseada
-        // Note: new Date('2023-10-12') em UTC pode ser dia 11 no Brasil dependendo de como o browser interpreta
-        // Melhor usar split para garantir
         const [yearStr, monthStr] = t.date.split('-');
         if (parseInt(yearStr) === currentYear) {
           const monthIndex = parseInt(monthStr) - 1; // 0-11
-          if (t.type === 'income') {
-            data[monthIndex].revenue += t.value;
-          } else {
-            data[monthIndex].expense += t.value;
-          }
+          
+          const val = Number(t.value || 0);
+          const itemCost = Number((t as any).cost || 0);
+          const revenue = t.type === 'income' ? val : 0;
+          const totalCost = t.type === 'income' ? itemCost : val;
+
+          data[monthIndex].revenue += revenue;
+          data[monthIndex].expense += totalCost;
+          data[monthIndex].profit += (revenue - totalCost);
         }
       });
 
@@ -93,18 +101,22 @@ const Financial: React.FC = () => {
       const data = years.map(year => ({
         name: year,
         revenue: 0,
-        expense: 0
+        expense: 0,
+        profit: 0
       }));
 
       transactions.forEach(t => {
         const year = t.date.split('-')[0];
         const yearIndex = data.findIndex(d => d.name === year);
         if (yearIndex !== -1) {
-          if (t.type === 'income') {
-            data[yearIndex].revenue += t.value;
-          } else {
-            data[yearIndex].expense += t.value;
-          }
+          const val = Number(t.value || 0);
+          const itemCost = Number((t as any).cost || 0);
+          const revenue = t.type === 'income' ? val : 0;
+          const totalCost = t.type === 'income' ? itemCost : val;
+
+          data[yearIndex].revenue += revenue;
+          data[yearIndex].expense += totalCost;
+          data[yearIndex].profit += (revenue - totalCost);
         }
       });
 
@@ -132,10 +144,69 @@ const Financial: React.FC = () => {
 
   }, [transactions]);
 
-  // 3. Lista de Transações Recentes (Ordenada por data)
-  const recentTransactions = useMemo(() => {
-    return [...transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [transactions]);
+  // 3. Lista de Transações Processadas (Filtradas e Ordenadas)
+  const processedTransactions = useMemo(() => {
+    let result = [...transactions];
+
+    // Aplicar Filtros
+    if (filterMonth) {
+      result = result.filter(t => t.date.startsWith(filterMonth));
+    }
+    if (filterCategory !== 'Todas') {
+      result = result.filter(t => t.category === filterCategory);
+    }
+    if (filterStatus !== 'Todos') {
+      if (filterStatus === 'Pagos') {
+        result = result.filter(t => t.status === 'Pago' || t.status === 'Recebido');
+      } else if (filterStatus === 'Pendentes') {
+        result = result.filter(t => t.status === 'Em aberto' || t.status === 'Pendente');
+      } else {
+        result = result.filter(t => t.status === filterStatus);
+      }
+    }
+
+    // Aplicar Ordenação
+    if (sortConfig !== null) {
+      result.sort((a, b) => {
+        let aValue: any = a[sortConfig.key as keyof Transaction];
+        let bValue: any = b[sortConfig.key as keyof Transaction];
+
+        // Normalizar strings para comparação
+        if (typeof aValue === 'string') aValue = aValue.toLowerCase();
+        if (typeof bValue === 'string') bValue = bValue.toLowerCase();
+
+        if (aValue < bValue) {
+          return sortConfig.direction === 'asc' ? -1 : 1;
+        }
+        if (aValue > bValue) {
+          return sortConfig.direction === 'asc' ? 1 : -1;
+        }
+        return 0;
+      });
+    } else {
+      // Default sort (Date DESC)
+      result.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }
+
+    return result;
+  }, [transactions, filterMonth, filterCategory, filterStatus, sortConfig]);
+
+  const handleSort = (key: keyof Transaction | 'date') => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const getSortIcon = (columnName: string) => {
+    if (sortConfig?.key !== columnName) {
+      return <span className="material-symbols-outlined text-[14px] text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity">unfold_more</span>;
+    }
+    return sortConfig.direction === 'asc' 
+      ? <span className="material-symbols-outlined text-[14px] text-primary">expand_less</span>
+      : <span className="material-symbols-outlined text-[14px] text-primary">expand_more</span>;
+  };
 
   // Formatador de moeda
   const formatCurrency = (value: number) =>
@@ -215,10 +286,11 @@ const Financial: React.FC = () => {
         {/* Gráfico de Barras */}
         <div className="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-[#f3f2f1]">
           <div className="flex justify-between items-center mb-6">
-            <h3 className="font-bold text-lg text-text-main">Receita vs Despesas</h3>
+            <h3 className="font-bold text-lg text-text-main">Receita vs Despesas vs Lucro</h3>
             <div className="flex gap-4 text-xs font-medium text-gray-900">
-              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-primary"></span> Receita</span>
-              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-[#e3e0de]"></span> Despesas</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-green-500"></span> Receita</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-red-500"></span> Despesas</span>
+              <span className="flex items-center gap-1"><span className="w-3 h-3 rounded-full bg-blue-500"></span> Lucro</span>
             </div>
           </div>
           <div className="h-[300px] w-full">
@@ -236,8 +308,9 @@ const Financial: React.FC = () => {
                   contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
                   formatter={(value: number) => formatCurrency(value)}
                 />
-                <Bar dataKey="revenue" name="Receita" fill="#c3a383" radius={[4, 4, 0, 0]} barSize={20} />
-                <Bar dataKey="expense" name="Despesas" fill="#e3e0de" radius={[4, 4, 0, 0]} barSize={20} />
+                <Bar dataKey="revenue" name="Receita" fill="#22c55e" radius={[4, 4, 0, 0]} barSize={15} />
+                <Bar dataKey="expense" name="Despesas" fill="#ef4444" radius={[4, 4, 0, 0]} barSize={15} />
+                <Bar dataKey="profit" name="Lucro" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={15} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -294,8 +367,8 @@ const Financial: React.FC = () => {
         <div className="flex justify-between items-end mb-4">
           <h3 className="font-bold text-xl text-text-main">Transações Recentes</h3>
           <div className="text-sm text-text-muted">
-            Saldo Total: <span className={`font-bold ${transactions.reduce((acc, t) => acc + (t.type === 'income' ? t.value : -t.value), 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {formatCurrency(transactions.reduce((acc, t) => acc + (t.type === 'income' ? t.value : -t.value), 0))}
+            Saldo Listado: <span className={`font-bold ${processedTransactions.reduce((acc, t) => acc + (t.type === 'income' ? t.value : -t.value), 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {formatCurrency(processedTransactions.reduce((acc, t) => acc + (t.type === 'income' ? t.value : -t.value), 0))}
             </span>
           </div>
         </div>
@@ -304,30 +377,91 @@ const Financial: React.FC = () => {
           <table className="w-full text-left hidden md:table">
             <thead className="bg-[#fcfaf8] border-b border-[#f3f2f1]">
               <tr>
-                <th className="py-4 px-6 text-xs font-bold text-text-muted uppercase">Data</th>
-                <th className="py-4 px-6 text-xs font-bold text-text-muted uppercase">Descrição</th>
-                <th className="py-4 px-6 text-xs font-bold text-text-muted uppercase">Categoria</th>
-                <th className="py-4 px-6 text-xs font-bold text-text-muted uppercase">Status</th>
-                <th className="py-4 px-6 text-xs font-bold text-text-muted uppercase text-right">Valor</th>
-                <th className="py-4 px-6"></th>
+                <th className="py-2 px-6 align-top min-w-[150px]">
+                  <div className="flex flex-col gap-2">
+                    <button onClick={() => handleSort('date')} className="flex items-center gap-1 text-xs font-bold text-text-muted uppercase hover:text-primary group text-left">
+                      Data {getSortIcon('date')}
+                    </button>
+                    <input 
+                      type="month" 
+                      value={filterMonth}
+                      onChange={(e) => setFilterMonth(e.target.value)}
+                      className="text-xs border border-gray-200 rounded px-2 py-1 outline-none focus:border-primary text-gray-700 bg-white"
+                    />
+                  </div>
+                </th>
+                <th className="py-2 px-6 align-top">
+                  <div className="flex flex-col gap-2">
+                    <button onClick={() => handleSort('description')} className="flex items-center gap-1 text-xs font-bold text-text-muted uppercase hover:text-primary group text-left">
+                      Descrição {getSortIcon('description')}
+                    </button>
+                    <div className="h-[26px]"></div> {/* Spacer for alignment */}
+                  </div>
+                </th>
+                <th className="py-2 px-6 align-top max-w-[140px]">
+                  <div className="flex flex-col gap-2">
+                    <button onClick={() => handleSort('category')} className="flex items-center gap-1 text-xs font-bold text-text-muted uppercase hover:text-primary group text-left">
+                      Categoria {getSortIcon('category')}
+                    </button>
+                    <select 
+                      value={filterCategory} 
+                      onChange={(e) => setFilterCategory(e.target.value)}
+                      className="text-xs border border-gray-200 rounded px-2 py-1 outline-none focus:border-primary text-gray-700 bg-white w-full"
+                    >
+                      <option value="Todas">Todas</option>
+                      <option value="Procedimentos">Procedimentos</option>
+                      <option value="Estoque">Estoque</option>
+                      <option value="Marketing">Marketing</option>
+                      <option value="Impostos">Impostos</option>
+                      <option value="Serviços">Serviços</option>
+                      <option value="Outros">Outros</option>
+                    </select>
+                  </div>
+                </th>
+                <th className="py-2 px-6 align-top max-w-[140px]">
+                  <div className="flex flex-col gap-2">
+                    <button onClick={() => handleSort('status')} className="flex items-center gap-1 text-xs font-bold text-text-muted uppercase hover:text-primary group text-left">
+                      Status {getSortIcon('status')}
+                    </button>
+                    <select 
+                      value={filterStatus} 
+                      onChange={(e) => setFilterStatus(e.target.value)}
+                      className="text-xs border border-gray-200 rounded px-2 py-1 outline-none focus:border-primary text-gray-700 bg-white w-full"
+                    >
+                      <option value="Todos">Todos</option>
+                      <option value="Pagos">Pagos/Recebidos</option>
+                      <option value="Pendentes">Pendentes</option>
+                      <option value="Não pago">Não pago</option>
+                    </select>
+                  </div>
+                </th>
+                <th className="py-2 px-6 align-top text-right min-w-[120px]">
+                  <div className="flex flex-col gap-2 items-end">
+                    <button onClick={() => handleSort('value')} className="flex items-center gap-1 text-xs font-bold text-text-muted uppercase hover:text-primary group justify-end">
+                      {getSortIcon('value')} Valor
+                    </button>
+                    <div className="h-[26px]"></div> {/* Spacer */}
+                  </div>
+                </th>
+                <th className="py-2 px-6"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#f3f2f1]">
               {loading ? (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-text-muted">Carregando dados financeiros...</td>
+                  <td colSpan={6} className="py-8 text-center text-text-muted">Carregando dados financeiros...</td>
                 </tr>
-              ) : recentTransactions.length === 0 ? (
+              ) : processedTransactions.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-8 text-center text-text-muted">
-                    Nenhuma transação registrada.
+                  <td colSpan={6} className="py-8 text-center text-text-muted">
+                    Nenhuma transação encontrada com os filtros atuais.
                   </td>
                 </tr>
               ) : (
-                recentTransactions.map((transaction) => (
+                processedTransactions.map((transaction) => (
                   <tr key={transaction.id || Math.random()} className="hover:bg-gray-50 transition-colors group">
                     <td className="py-4 px-6 text-sm font-medium text-text-main">
-                      {formatDate(new Date(transaction.date + 'T12:00:00'), { day: '2-digit', month: 'short', year: 'numeric' })}
+                      {formatDate(transaction.date + 'T12:00:00', { day: '2-digit', month: 'short', year: 'numeric' })}
                     </td>
                     <td className="py-4 px-6">
                       <div className="flex flex-col">
@@ -387,12 +521,22 @@ const Financial: React.FC = () => {
 
           {/* Mobile Card View */}
           <div className="md:hidden divide-y divide-[#f3f2f1]">
+            {/* Mobile Filters UI - Keep simple for mobile */}
+            <div className="p-4 bg-gray-50 flex flex-wrap gap-2 items-center">
+               <span className="text-xs font-bold text-gray-500 mr-2">Filtros:</span>
+               <input 
+                  type="month" 
+                  value={filterMonth}
+                  onChange={(e) => setFilterMonth(e.target.value)}
+                  className="text-xs border border-gray-200 rounded px-2 py-1 outline-none focus:border-primary text-gray-700 bg-white"
+                />
+            </div>
             {loading ? (
               <div className="py-8 text-center text-text-muted">Carregando dados financeiros...</div>
-            ) : recentTransactions.length === 0 ? (
-              <div className="py-8 text-center text-text-muted">Nenhuma transação registrada.</div>
+            ) : processedTransactions.length === 0 ? (
+              <div className="py-8 text-center text-text-muted">Nenhuma transação encontrada.</div>
             ) : (
-              recentTransactions.map((transaction) => (
+              processedTransactions.map((transaction) => (
                 <div key={transaction.id || Math.random()} className="p-4 flex flex-col gap-3">
                   <div className="flex justify-between items-start">
                     <div className="flex flex-col">
@@ -404,7 +548,7 @@ const Financial: React.FC = () => {
                         </span>
                       )}
                       <span className="text-xs text-text-muted">
-                        {formatDate(new Date(transaction.date + 'T12:00:00'), { day: '2-digit', month: 'short', year: 'numeric' })}
+                        {formatDate(transaction.date + 'T12:00:00', { day: '2-digit', month: 'short', year: 'numeric' })}
                       </span>
                     </div>
                     <span className={`text-sm font-bold ${transaction.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>

@@ -542,7 +542,7 @@ const AnamneseCorporal: React.FC<AnamneseCorporalProps> = ({ patientData, onPrin
                     <h2 className="font-bold uppercase bg-gray-100 p-0.5 pl-2 mb-2 text-[10px] tracking-wider border-l-4 border-black">Dados Pessoais</h2>
                     <div className="grid grid-cols-[auto_1fr_auto_1fr] gap-x-4 gap-y-1.5 ml-2">
                         <span className="font-bold text-gray-700">Nome:</span> <span className="font-medium border-b border-gray-200">{patientData.name}</span>
-                        <span className="font-bold text-gray-700">Data Nasc:</span> <span className="font-medium border-b border-gray-200">{formatDate(new Date(patientData.birthDate))}</span>
+                        <span className="font-bold text-gray-700">Data Nasc:</span> <span className="font-medium border-b border-gray-200">{formatDate(patientData.birthDate)}</span>
 
                         <span className="font-bold text-gray-700">Telefone:</span> <span className="font-medium border-b border-gray-200">{patientData.phone}</span>
                         <span className="font-bold text-gray-700">Email:</span> <span className="font-medium border-b border-gray-200">{patientData.email}</span>

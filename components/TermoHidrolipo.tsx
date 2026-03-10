@@ -19,7 +19,7 @@ interface TermoHidrolipoProps {
 const TermoHidrolipo: React.FC<TermoHidrolipoProps> = ({ paciente, substancias, signatureUrl, signatureDate }) => {
     // Data de hoje (ex: "27 de Janeiro de 2026")
     const dataHoje = signatureDate
-        ? formatDate(new Date(signatureDate), { day: 'numeric', month: 'long', year: 'numeric' })
+        ? formatDate(signatureDate, { day: 'numeric', month: 'long', year: 'numeric' })
         : formatDate(new Date(), { day: 'numeric', month: 'long', year: 'numeric' });
 
     // Lógica de documento (RG prioridade sobre CPF neste caso, conforme solicitado "RG/CPF")

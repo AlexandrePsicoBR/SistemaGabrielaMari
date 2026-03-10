@@ -169,7 +169,7 @@ const NewEvolutionModal: React.FC<ModalProps> = ({ onClose, onSave, initialData 
       <div className="relative bg-white dark:bg-[#1d1915] rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden animate-fade-in">
 
         {/* Header */}
-        <div className="px-8 py-5 border-b border-[#e3e0de] flex justify-between items-center bg-white sticky top-0 z-10">
+        <div className="px-8 py-5 border-b border-[#e3e0de] flex justify-between items-center bg-white md:sticky md:top-0 relative z-10">
           <div>
             <h2 className="text-2xl font-serif font-bold text-text-main">{initialData ? 'Editar Evolução' : 'Nova Evolução Clínica'}</h2>
           </div>
