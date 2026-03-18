@@ -1644,9 +1644,13 @@ const PatientDetail: React.FC<PatientDetailProps> = ({ onBack, patientId, userRo
                 <img src={item.beforeUrl} className="w-full h-full object-cover" alt="Antes" />
                 <span className="absolute bottom-2 left-2 bg-black/60 text-white text-[10px] font-bold px-2 py-0.5 rounded backdrop-blur-sm">ANTES</span>
               </div>
-              <div className="relative h-full overflow-hidden rounded-lg bg-gray-100">
-                <img src={item.afterUrl} className="w-full h-full object-cover" alt="Depois" />
-                <span className="absolute bottom-2 left-2 bg-primary/80 text-white text-[10px] font-bold px-2 py-0.5 rounded backdrop-blur-sm">DEPOIS</span>
+              <div className="relative h-full overflow-hidden rounded-lg bg-gray-100 flex items-center justify-center">
+                {item.afterUrl ? (
+                  <img src={item.afterUrl} className="w-full h-full object-cover" alt="Depois" />
+                ) : (
+                  <span className="text-gray-400 font-medium text-sm text-center px-4 absolute inset-0 flex items-center justify-center">Foto de Depois aqui</span>
+                )}
+                <span className="absolute bottom-2 left-2 bg-primary/80 text-white text-[10px] font-bold px-2 py-0.5 rounded backdrop-blur-sm relative z-10">DEPOIS</span>
               </div>
             </div>
             <div className="mt-3 text-xs text-text-muted line-clamp-1 group-hover:text-primary transition-colors">

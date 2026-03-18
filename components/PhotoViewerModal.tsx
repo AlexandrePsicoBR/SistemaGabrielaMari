@@ -330,8 +330,12 @@ const PhotoViewerModal: React.FC<ModalProps> = ({ photo, onClose, onUpdate, onDe
               <div className="flex justify-between items-center">
                 <span className="text-xs font-bold uppercase tracking-wide text-white bg-primary px-2 py-0.5 rounded">Depois</span>
               </div>
-              <div className="relative flex-1 rounded-xl overflow-hidden bg-gray-100 border border-[#e3e0de] group min-h-[300px]">
-                <img src={formData.afterUrl} alt="Depois" className="absolute inset-0 w-full h-full object-contain bg-black/5" />
+              <div className="relative flex-1 rounded-xl overflow-hidden bg-gray-100 border border-[#e3e0de] group min-h-[300px] flex items-center justify-center">
+                {formData.afterUrl ? (
+                  <img src={formData.afterUrl} alt="Depois" className="absolute inset-0 w-full h-full object-contain bg-black/5" />
+                ) : (
+                  <span className="text-gray-400 font-medium text-lg text-center px-4 absolute inset-0 flex items-center justify-center">Foto de Depois aqui</span>
+                )}
                 {isEditing && (
                   <div className="absolute inset-x-0 bottom-0 p-3 bg-white/95 border-t border-gray-200 backdrop-blur-sm flex justify-center">
                     <label className="cursor-pointer bg-white border border-gray-300 hover:bg-gray-50 text-text-main px-4 py-2 rounded-lg text-xs font-bold shadow-sm transition-colors flex items-center gap-2">

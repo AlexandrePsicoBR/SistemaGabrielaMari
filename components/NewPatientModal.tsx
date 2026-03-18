@@ -118,51 +118,15 @@ const NewPatientModal: React.FC<ModalProps> = ({ onClose, onSave, initialData })
         avatarPath = publicUrlData.publicUrl;
       }
 
-      // Insert into Supabase
-      const { error } = await supabase.from('patients').insert([{
-        name: formData.name,
-        birth_date: formData.birthDate || null,
-        email: formData.email,
-        phone: formData.phone,
-        cpf: formData.cpf,
-        gender: formData.gender,
-        address: formData.street, // Legacy fallback if needed, or keep strictly structured. Let's send street to 'address' or 'street'?
-        // The DB has 'address', 'street', 'city', 'state', 'zip_code'. 
-        // Best practice: Populate 'street' -> 'street', 'city' -> 'city', etc.
-        // And maybe populate 'address' with the full string just in case legacy views use it? 
-        // Or if 'address' column is actually 'street' in intent? 
-        // Looking at PatientDetail map: street: patient.street. So columns exist.
-
-        street: formData.street,
-        city: formData.city,
-        state: formData.state,
-        zip_code: formData.zipCode,
-
-        // We can keep 'address' as redundancy or concatenation? 
-        // If we remove 'address' from this object but the DB column is non-nullable, we might have issue.
-        // Assuming 'address' is nullable or we treat 'street' as primary.
-        // Let's safe bet: address = street.
-        // address: formData.street, // Removed duplicate
-
-        source: formData.source,
-        status: formData.status,
-
-        avatar_url: avatarPath,
-        allergies: formData.allergies
-      }]);
-
-      if (error) throw error;
-
-      // ------------------------------------------------------------------
-      // AUTO-CREATE AUTH USER FOR THE PATIENT
-      // ------------------------------------------------------------------
       if (!isEditing) {
+        // ------------------------------------------------------------------
+        // FLUXO DE CADASTRO NOVO: Criar acesso Auth PRIMEIRO.
+        // O Supabase tem uma Trigger (handle_new_user) que insere a linha base na tabela patients.
+        // ------------------------------------------------------------------
         const firstName = formData.name.trim().split(' ')[0];
-        // Password rule: FirstName + 1234
+        // Senha padrão: Nome + 1234
         const defaultPassword = `${firstName}1234`;
 
-        // Create a secondary non-persistent client so we don't log out the admin
-        // We need to use the actual URL and Anon Key from env vars
         const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
         const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
         const supabaseAdmin = createClient(supabaseUrl, supabaseAnonKey, {
@@ -179,29 +143,77 @@ const NewPatientModal: React.FC<ModalProps> = ({ onClose, onSave, initialData })
           options: {
             data: {
               full_name: formData.name,
-              role: 'patient', // Ensure they are a common user, not admin
+              role: 'patient',
             }
           }
         });
 
         if (authError) {
-          console.error('Erro ao criar usuário Auth para o paciente:', authError);
-          alert(`Paciente salvo, mas houve um erro ao criar o acesso dele (Auth): ${authError.message}`);
-        } else {
-          console.log('Usuário Auth do paciente criado com sucesso!', authData);
-          
-          // Send "Welcome / Reset Password" email so they can log in
-          const { error: resetError } = await supabaseAdmin.auth.resetPasswordForEmail(formData.email, {
-            redirectTo: 'https://portal.gabrielamari.com.br/',
-          });
-          
-          if (resetError) {
-             console.error('Erro ao enviar email de boas vindas:', resetError);
-             alert('Usuário criado, mas não foi possível enviar o email de boas vindas automaticamente.');
+          console.error('Erro ao criar conta Auth para o paciente:', authError);
+          alert(`Erro ao cadastrar paciente: ${authError.message}`);
+          setLoading(false);
+          return;
+        }
+
+        const newUserId = authData?.user?.id;
+
+        if (newUserId) {
+          // Agora enviamos um UPDATE para preencher os dados complementares na tabela patients
+          const { error: updateError } = await supabase.from('patients').update({
+            birth_date: formData.birthDate || null,
+            phone: formData.phone,
+            cpf: formData.cpf,
+            gender: formData.gender,
+            address: formData.street, // Backup de segurança caso algo use a coluna defasada
+            street: formData.street,
+            city: formData.city,
+            state: formData.state,
+            zip_code: formData.zipCode,
+            source: formData.source,
+            status: formData.status,
+            avatar_url: avatarPath,
+            allergies: formData.allergies
+          }).eq('id', newUserId);
+
+          if (updateError) {
+             console.error('Erro ao atualizar dados complementares do paciente:', updateError);
+             alert('A conta de acesso foi criada, mas ocorreu um erro ao salvar o restante dos dados do perfil.');
           } else {
-             alert('Paciente cadastrado com sucesso! Um e-mail de boas-vindas com o link de acesso foi enviado.');
+             console.log('Paciente atualizado com dados complementares com sucesso.');
+             
+             const { error: resetError } = await supabaseAdmin.auth.resetPasswordForEmail(formData.email, {
+               redirectTo: 'https://portal.gabrielamari.com.br/',
+             });
+             
+             if (resetError) {
+                console.error('Erro ao enviar email de boas vindas:', resetError);
+                alert('Paciente salvo, mas não foi possível enviar o email de boas vindas automaticamente.');
+             } else {
+                alert('Paciente cadastrado com sucesso! Um e-mail de boas-vindas com o link de acesso foi enviado.');
+             }
           }
         }
+      } else {
+        // Redundância para atualizações diretas caso o onSave não seja passado
+        const { error: updateError } = await supabase.from('patients').update({
+          name: formData.name,
+          birth_date: formData.birthDate || null,
+          phone: formData.phone,
+          cpf: formData.cpf,
+          gender: formData.gender,
+          address: formData.street,
+          street: formData.street,
+          city: formData.city,
+          state: formData.state,
+          zip_code: formData.zipCode,
+          source: formData.source,
+          status: formData.status,
+          avatar_url: avatarPath,
+          allergies: formData.allergies
+        }).eq('id', initialData.id);
+
+        if (updateError) throw updateError;
+        alert('Paciente atualizado com sucesso!');
       }
 
       onClose();
